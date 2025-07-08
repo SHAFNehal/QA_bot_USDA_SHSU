@@ -28,12 +28,10 @@ llm_qa_pipeline/
 ├── data_cleaner.py           # Clean and validate generated data
 ├── fine_tuner.py             # Fine-tune models using LoRA
 ├── inference.py              # Interactive QA chatbot
-├── qa_calculator.py          # Calculate optimal QA pair counts
 ├── config.py                 # Configuration settings
 ├── requirements.txt          # Python dependencies
 ├── README.md                 # This file
 ├── QUICK_START.md           # Quick start guide
-└── PROJECT_STRUCTURE.md     # Detailed project structure
 ```
 
 ## Installation
@@ -166,12 +164,6 @@ python inference.py \
 - `--warmup_steps`: Warmup steps (default: 50)
 
 ## Advanced Usage
-
-### QA Calculator
-Calculate optimal number of QA pairs for your use case:
-```bash
-python qa_calculator.py --interactive
-```
 
 ### Custom Configuration
 Modify `config.py` for project-wide settings:
