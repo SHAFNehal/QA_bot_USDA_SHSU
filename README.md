@@ -1,4 +1,4 @@
-# SHSU Q/A Bot
+# SHSU USDA Q/A Bot
 
 # LLM QA Dataset Generator, Fine-Tuner, and RAG Chatbot
 
