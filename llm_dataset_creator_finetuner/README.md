@@ -68,7 +68,6 @@ python data_cleaner.py \
 
 ### 4. Fine-tune the Model
 ```bash
-echo "Step 4: Fine-tuning model..."
 python fine_tuner.py \
     --dataset_path data_output/qa_dataset_cleaned.jsonl \
     --output_dir fine_tuned_weights \
