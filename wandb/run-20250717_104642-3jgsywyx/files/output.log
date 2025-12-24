@@ -1,0 +1,56 @@
+  0%|                                                                                                                         | 0/565 [00:00<?, ?it/s]Traceback (most recent call last):
+  File "C:\Anaconda\QA_bot_USDA_SHSU-main\QA_bot_USDA_SHSU-main\llm_dataset_creator_finetuner\sft.py", line 154, in <module>
+    main()
+  File "C:\Anaconda\QA_bot_USDA_SHSU-main\QA_bot_USDA_SHSU-main\llm_dataset_creator_finetuner\sft.py", line 143, in main
+    train(
+  File "C:\Anaconda\QA_bot_USDA_SHSU-main\QA_bot_USDA_SHSU-main\llm_dataset_creator_finetuner\sft.py", line 117, in train
+    trainer.train()
+  File "C:\Users\axi034\AppData\Local\anaconda3\envs\llm_qa_env\lib\site-packages\transformers\trainer.py", line 2206, in train
+    return inner_training_loop(
+  File "C:\Users\axi034\AppData\Local\anaconda3\envs\llm_qa_env\lib\site-packages\transformers\trainer.py", line 2607, in _inner_training_loop
+    self.optimizer.step()
+  File "C:\Users\axi034\AppData\Local\anaconda3\envs\llm_qa_env\lib\site-packages\accelerate\optimizer.py", line 179, in step
+    self.optimizer.step(closure)
+  File "C:\Users\axi034\AppData\Local\anaconda3\envs\llm_qa_env\lib\site-packages\torch\optim\lr_scheduler.py", line 137, in wrapper
+    return func.__get__(opt, opt.__class__)(*args, **kwargs)
+  File "C:\Users\axi034\AppData\Local\anaconda3\envs\llm_qa_env\lib\site-packages\torch\optim\optimizer.py", line 487, in wrapper
+    out = func(*args, **kwargs)
+  File "C:\Users\axi034\AppData\Local\anaconda3\envs\llm_qa_env\lib\site-packages\torch\optim\optimizer.py", line 91, in _use_grad
+    ret = func(self, *args, **kwargs)
+  File "C:\Users\axi034\AppData\Local\anaconda3\envs\llm_qa_env\lib\site-packages\torch\optim\adamw.py", line 220, in step
+    adamw(
+  File "C:\Users\axi034\AppData\Local\anaconda3\envs\llm_qa_env\lib\site-packages\torch\optim\optimizer.py", line 154, in maybe_fallback
+    return func(*args, **kwargs)
+  File "C:\Users\axi034\AppData\Local\anaconda3\envs\llm_qa_env\lib\site-packages\torch\optim\adamw.py", line 782, in adamw
+    func(
+  File "C:\Users\axi034\AppData\Local\anaconda3\envs\llm_qa_env\lib\site-packages\torch\optim\adamw.py", line 606, in _multi_tensor_adamw
+    exp_avg_sq_sqrt = torch._foreach_sqrt(device_exp_avg_sqs)
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 44.00 MiB. GPU 0 has a total capacity of 4.00 GiB of which 0 bytes is free. Of the allocated memory 18.41 GiB is allocated by PyTorch, and 325.02 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+Traceback (most recent call last):
+  File "C:\Anaconda\QA_bot_USDA_SHSU-main\QA_bot_USDA_SHSU-main\llm_dataset_creator_finetuner\sft.py", line 154, in <module>
+    main()
+  File "C:\Anaconda\QA_bot_USDA_SHSU-main\QA_bot_USDA_SHSU-main\llm_dataset_creator_finetuner\sft.py", line 143, in main
+    train(
+  File "C:\Anaconda\QA_bot_USDA_SHSU-main\QA_bot_USDA_SHSU-main\llm_dataset_creator_finetuner\sft.py", line 117, in train
+    trainer.train()
+  File "C:\Users\axi034\AppData\Local\anaconda3\envs\llm_qa_env\lib\site-packages\transformers\trainer.py", line 2206, in train
+    return inner_training_loop(
+  File "C:\Users\axi034\AppData\Local\anaconda3\envs\llm_qa_env\lib\site-packages\transformers\trainer.py", line 2607, in _inner_training_loop
+    self.optimizer.step()
+  File "C:\Users\axi034\AppData\Local\anaconda3\envs\llm_qa_env\lib\site-packages\accelerate\optimizer.py", line 179, in step
+    self.optimizer.step(closure)
+  File "C:\Users\axi034\AppData\Local\anaconda3\envs\llm_qa_env\lib\site-packages\torch\optim\lr_scheduler.py", line 137, in wrapper
+    return func.__get__(opt, opt.__class__)(*args, **kwargs)
+  File "C:\Users\axi034\AppData\Local\anaconda3\envs\llm_qa_env\lib\site-packages\torch\optim\optimizer.py", line 487, in wrapper
+    out = func(*args, **kwargs)
+  File "C:\Users\axi034\AppData\Local\anaconda3\envs\llm_qa_env\lib\site-packages\torch\optim\optimizer.py", line 91, in _use_grad
+    ret = func(self, *args, **kwargs)
+  File "C:\Users\axi034\AppData\Local\anaconda3\envs\llm_qa_env\lib\site-packages\torch\optim\adamw.py", line 220, in step
+    adamw(
+  File "C:\Users\axi034\AppData\Local\anaconda3\envs\llm_qa_env\lib\site-packages\torch\optim\optimizer.py", line 154, in maybe_fallback
+    return func(*args, **kwargs)
+  File "C:\Users\axi034\AppData\Local\anaconda3\envs\llm_qa_env\lib\site-packages\torch\optim\adamw.py", line 782, in adamw
+    func(
+  File "C:\Users\axi034\AppData\Local\anaconda3\envs\llm_qa_env\lib\site-packages\torch\optim\adamw.py", line 606, in _multi_tensor_adamw
+    exp_avg_sq_sqrt = torch._foreach_sqrt(device_exp_avg_sqs)
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 44.00 MiB. GPU 0 has a total capacity of 4.00 GiB of which 0 bytes is free. Of the allocated memory 18.41 GiB is allocated by PyTorch, and 325.02 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)

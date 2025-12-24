@@ -5,9 +5,8 @@ from typing import List, Dict, Any
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor
 from sentence_transformers import SentenceTransformer, util
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 
-from utils.file_processor import process_files 
+from utils.file_processor import process_files  # Assumed available
 from utils.llm_utils import (
     create_pipeline,
     generate_qa_with_pipeline,

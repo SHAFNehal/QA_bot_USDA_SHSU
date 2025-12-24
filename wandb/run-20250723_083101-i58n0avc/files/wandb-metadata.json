@@ -1,0 +1,54 @@
+{
+  "os": "Windows-10-10.0.26100-SP0",
+  "python": "CPython 3.10.18",
+  "startedAt": "2025-07-23T13:31:01.602121Z",
+  "args": [
+    "--dataset_path",
+    "data_output/qa_dataset_cleaned.jsonl",
+    "--output_dir",
+    "fine_tuned_weights",
+    "--num_train_epochs",
+    "10",
+    "--per_device_train_batch_size",
+    "2",
+    "--learning_rate",
+    "3e-5",
+    "--warmup_steps",
+    "100",
+    "--logging_steps",
+    "20",
+    "--save_steps",
+    "200"
+  ],
+  "program": "C:\\Anaconda\\QA_bot_USDA_SHSU-main\\QA_bot_USDA_SHSU-main\\llm_dataset_creator_finetuner\\fine_tuner.py",
+  "codePath": "fine_tuner.py",
+  "codePathLocal": "fine_tuner.py",
+  "email": "ahsankafco@gmail.com",
+  "root": "C:\\Anaconda\\QA_bot_USDA_SHSU-main\\QA_bot_USDA_SHSU-main\\llm_dataset_creator_finetuner",
+  "host": "D149759",
+  "executable": "C:\\Users\\axi034\\AppData\\Local\\anaconda3\\envs\\llm_qa_env\\python.exe",
+  "cpu_count": 4,
+  "cpu_count_logical": 8,
+  "gpu": "Quadro P1000",
+  "gpu_count": 1,
+  "disk": {
+    "/": {
+      "total": "510296846336",
+      "used": "242575712256"
+    }
+  },
+  "memory": {
+    "total": "34028937216"
+  },
+  "gpu_nvidia": [
+    {
+      "name": "Quadro P1000",
+      "memoryTotal": "4294967296",
+      "cudaCores": 640,
+      "architecture": "Pascal",
+      "uuid": "GPU-154e078f-bdd0-04c3-6f9b-e2edc991787f"
+    }
+  ],
+  "cudaVersion": "12.8",
+  "writerId": "f8x60jgscszvuhzdndb98wz9399ewljy"
+}
