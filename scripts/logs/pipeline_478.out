@@ -1,0 +1,20 @@
+
+[0;32m========================================[0m
+[0;32mPipeline Configuration[0m
+[0;32m========================================[0m
+
+Model:               TinyLlama/TinyLlama-1.1B-Chat-v1.0
+Input Directory:     /home/ybd002/llm/data_input/
+Output Directory:    data_output
+Output Model Dir:    fine_tuned_weights
+Training Epochs:     10
+Batch Size:          2
+Questions per Chunk: 3
+
+
+[0;32m========================================[0m
+[0;32mStep 1/7: Generating QA dataset from documents[0m
+[0;32m========================================[0m
+
+Found 9 document(s) to process
+Pipeline job completed at Thu Jan  1 09:16:22 AM CST 2026
