@@ -18,3 +18,7 @@ json5>=0.9.14
 # bitsandbytes>=0.41.0
 wandb>=0.16.0
 scipy>=1.10.0
+# Evaluation metrics
+rouge-score>=0.1.2
+nltk>=3.8.0
+sentence-transformers>=2.2.0

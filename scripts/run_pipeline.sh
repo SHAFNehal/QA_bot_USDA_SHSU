@@ -21,9 +21,9 @@
 
 set -e  # Exit on error
 
-# Set PYTHONPATH to project root so Python can find 'src' module
-# This ensures imports like 'from src.utils...' work correctly
-PROJECT_ROOT="/home/ybd002/llm"
+# Project root (directory containing src/). Portable: works from any clone path.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 export PYTHONPATH="${PROJECT_ROOT}:${PYTHONPATH}"
 
 # Default Configuration (can be overridden by environment variables or command-line args)
@@ -174,7 +174,7 @@ if [ "$EVAL_ONLY" = true ]; then
     fi
 
     print_step "Evaluating model"
-    python /home/ybd002/llm/src/inference/evaluate.py \
+    python "$PROJECT_ROOT/src/inference/evaluate.py" \
         --model_path "$OUTPUT_MODEL_DIR" \
         --base_model "$MODEL_NAME" \
         --output "$OUTPUT_DIR/evaluation_report.json" \
@@ -224,7 +224,7 @@ if [ "$SKIP_GENERATION" = false ]; then
     echo "Found $FILE_COUNT document(s) to process"
 
     # Build the command with optional paraphrase augmentation
-    CMD="python /home/ybd002/llm/src/dataset/dataset_creator.py \
+    CMD="python \"$PROJECT_ROOT/src/dataset/dataset_creator.py\" \
         --input_dir \"$INPUT_DIR\" \
         --output_file \"$OUTPUT_DIR/qa_dataset.jsonl\" \
         --model_name \"$MODEL_NAME\" \
@@ -248,7 +248,7 @@ fi
 # Step 2: Clean and validate the dataset
 print_step "Step 2/7: Cleaning and validating dataset"
 
-python /home/ybd002/llm/src/dataset/data_cleaner.py \
+python "$PROJECT_ROOT/src/dataset/data_cleaner.py" \
     --input "$OUTPUT_DIR/qa_dataset.jsonl" \
     --output "$OUTPUT_DIR/qa_cleaned.jsonl" \
     --relaxed
@@ -259,7 +259,7 @@ echo "Cleaned dataset: $OUTPUT_DIR/qa_cleaned.jsonl ($QA_COUNT pairs)"
 # Step 3: Generate multi-turn conversation data
 print_step "Step 3/7: Generating multi-turn conversation data"
 
-python /home/ybd002/llm/src/dataset/generators/multiturn_generator.py \
+python "$PROJECT_ROOT/src/dataset/generators/multiturn_generator.py" \
     --input "$OUTPUT_DIR/qa_cleaned.jsonl" \
     --output "$OUTPUT_DIR/multiturn.jsonl" \
     --include_coreference
@@ -270,7 +270,7 @@ echo "Multi-turn data: $OUTPUT_DIR/multiturn.jsonl ($MULTITURN_COUNT examples)"
 # Step 4: Merge all datasets
 print_step "Step 4/7: Merging datasets (QA + conversational + multi-turn)"
 
-python /home/ybd002/llm/src/dataset/merge_datasets.py \
+python "$PROJECT_ROOT/src/dataset/merge_datasets.py" \
     --qa_data "$OUTPUT_DIR/qa_cleaned.jsonl" \
     --multiturn_data "$OUTPUT_DIR/multiturn.jsonl" \
     --output "$OUTPUT_DIR/training_dataset.jsonl" \
@@ -292,7 +292,7 @@ if [ "$SKIP_TRAINING" = false ]; then
     echo "  - Dataset size: $DATASET_SIZE examples"
     echo ""
 
-    python /home/ybd002/llm/src/training/fine_tuner.py \
+    python "$PROJECT_ROOT/src/training/fine_tuner.py" \
         --dataset_path "$OUTPUT_DIR/training_dataset.jsonl" \
         --output_dir "$OUTPUT_MODEL_DIR" \
         --model_name "$MODEL_NAME" \
@@ -335,7 +335,7 @@ fi
 print_step "Step 7/7: Evaluating the model performance"
 
 if [ -d "$OUTPUT_MODEL_DIR" ]; then
-    python /home/ybd002/llm/src/inference/evaluate.py \
+    python "$PROJECT_ROOT/src/inference/evaluate.py" \
         --model_path "$OUTPUT_MODEL_DIR" \
         --base_model "$MODEL_NAME" \
         --output "$OUTPUT_DIR/evaluation_report.json" \
@@ -380,10 +380,10 @@ echo "Next Steps:"
 echo "=================================="
 echo ""
 echo "1. Test the model interactively:"
-echo "   python /home/ybd002/llm/src/inference/inference.py --peft_model $OUTPUT_MODEL_DIR --interactive"
+echo "   python \"$PROJECT_ROOT/src/inference/inference.py\" --peft_model $OUTPUT_MODEL_DIR --interactive"
 echo ""
 echo "2. Run batch evaluation (with holdout test set):"
-echo "   python /home/ybd002/llm/src/inference/evaluate.py --model_path $OUTPUT_MODEL_DIR --base_model \"$MODEL_NAME\" --test_data $OUTPUT_DIR/training_test.jsonl"
+echo "   python \"$PROJECT_ROOT/src/inference/evaluate.py\" --model_path $OUTPUT_MODEL_DIR --base_model \"$MODEL_NAME\" --test_data $OUTPUT_DIR/training_test.jsonl"
 echo ""
 echo "3. View evaluation results:"
 echo "   cat $OUTPUT_DIR/evaluation_report.json"

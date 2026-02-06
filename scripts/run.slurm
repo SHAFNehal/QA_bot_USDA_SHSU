@@ -19,17 +19,18 @@ else
 fi
 
 mkdir -p logs
-cd $SLURM_SUBMIT_DIR
+cd "$SLURM_SUBMIT_DIR"
 
-# Set PYTHONPATH to project root so Python can find 'src' module
-export PYTHONPATH="/home/ybd002/llm:$PYTHONPATH"
+# Project root (submit dir). Override with PROJECT_ROOT env if needed.
+PROJECT_ROOT="${PROJECT_ROOT:-$SLURM_SUBMIT_DIR}"
+export PYTHONPATH="${PROJECT_ROOT}:${PYTHONPATH}"
 
 # Disable tokenizers parallelism warning (safe for SLURM/forked processes)
 export TOKENIZERS_PARALLELISM=false
 
-bash /home/ybd002/llm/scripts/run_pipeline.sh \
+bash "$PROJECT_ROOT/scripts/run_pipeline.sh" \
     --model "${MODEL_NAME:-TinyLlama/TinyLlama-1.1B-Chat-v1.0}" \
-    --input-dir "${INPUT_DIR:-/home/ybd002/llm/data_input/}" \
+    --input-dir "${INPUT_DIR:-$PROJECT_ROOT/data_input}" \
     --output-dir "${OUTPUT_DIR:-data_output}" \
     --output-model-dir "${OUTPUT_MODEL_DIR:-fine_tuned_weights}" \
     --epochs "${NUM_EPOCHS:-10}" \

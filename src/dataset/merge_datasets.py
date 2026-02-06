@@ -5,35 +5,13 @@ Merges QA datasets with conversational data and multi-turn conversation data
 to create a comprehensive training dataset.
 """
 
-import json
 import argparse
+import os
 import random
 from typing import List, Dict
-from pathlib import Path
 
+from src.utils.file_processor import load_jsonl, save_jsonl
 from src.dataset.generators.conversational_data import get_conversational_qa_pairs
-
-
-def load_jsonl(file_path: str) -> List[Dict]:
-    """Load data from a JSONL file."""
-    data = []
-    with open(file_path, 'r', encoding='utf-8') as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                try:
-                    data.append(json.loads(line))
-                except json.JSONDecodeError:
-                    continue
-    return data
-
-
-def save_jsonl(data: List[Dict], file_path: str) -> None:
-    """Save data to a JSONL file."""
-    Path(file_path).parent.mkdir(parents=True, exist_ok=True)
-    with open(file_path, 'w', encoding='utf-8') as f:
-        for item in data:
-            f.write(json.dumps(item, ensure_ascii=False) + '\n')
 
 
 def merge_datasets(
@@ -63,7 +41,7 @@ def merge_datasets(
     all_data = []
 
     # Load QA data
-    if qa_data_path and Path(qa_data_path).exists():
+    if qa_data_path and os.path.isfile(qa_data_path):
         qa_data = load_jsonl(qa_data_path)
         print(f"Loaded {len(qa_data)} QA pairs from {qa_data_path}")
         all_data.extend(qa_data)
@@ -71,7 +49,7 @@ def merge_datasets(
         print(f"No QA data found at {qa_data_path}")
 
     # Load multi-turn data
-    if multiturn_data_path and Path(multiturn_data_path).exists():
+    if multiturn_data_path and os.path.isfile(multiturn_data_path):
         multiturn_data = load_jsonl(multiturn_data_path)
         print(f"Loaded {len(multiturn_data)} multi-turn examples from {multiturn_data_path}")
         all_data.extend(multiturn_data)

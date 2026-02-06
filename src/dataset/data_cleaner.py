@@ -7,30 +7,11 @@ strict QA validation and relaxed conversational data validation.
 
 import json
 import argparse
-from typing import List, Dict, Any, Tuple
 import re
 from collections import defaultdict
-from pathlib import Path
+from typing import List, Dict, Any, Tuple
 
-
-def load_jsonl(file_path: str) -> List[Dict[str, Any]]:
-    """Load JSONL file."""
-    data = []
-    with open(file_path, 'r', encoding='utf-8') as f:
-        for line in f:
-            try:
-                data.append(json.loads(line.strip()))
-            except json.JSONDecodeError:
-                continue
-    return data
-
-
-def save_jsonl(data: List[Dict[str, Any]], file_path: str) -> None:
-    """Save data to JSONL file."""
-    Path(file_path).parent.mkdir(parents=True, exist_ok=True)
-    with open(file_path, 'w', encoding='utf-8') as f:
-        for item in data:
-            f.write(json.dumps(item, ensure_ascii=False) + '\n')
+from src.utils.file_processor import load_jsonl, save_jsonl
 
 
 def is_conversational_input(text: str) -> bool:

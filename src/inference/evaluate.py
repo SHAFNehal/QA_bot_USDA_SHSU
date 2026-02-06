@@ -2,14 +2,19 @@
 Model Evaluation Script
 
 This script evaluates a fine-tuned model on various test cases including:
-- Greeting responses
-- Rephrased questions
-- Follow-up questions (multi-turn)
-- Domain-specific QA accuracy
+- Greeting responses (keyword-based)
+- Rephrased questions, multi-turn, holdout set
+
+Metrics:
+- Keyword match (pass/fail, score) for all tests.
+- Standard metrics on tests with reference (e.g. holdout): BLEU, ROUGE-1/2/L,
+  embedding similarity (cosine), exact match, token F1. Optional: LLM-as-judge.
 
 Usage:
     python evaluate.py --model_path fine_tuned_weights
-    python evaluate.py --model_path fine_tuned_weights --base_model TinyLlama/TinyLlama-1.1B-Chat-v1.0
+    python evaluate.py --model_path fine_tuned_weights --test_data training_test.jsonl
+    python evaluate.py --model_path fine_tuned_weights --no_embedding  # skip embedding metric
+    python evaluate.py --model_path fine_tuned_weights --llm_judge    # enable LLM-as-judge
 """
 
 import argparse
@@ -19,6 +24,9 @@ import re
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
+
+from src.utils.file_processor import load_jsonl
+from src.inference.metrics import compute_all_metrics, aggregate_metrics
 
 
 @dataclass
@@ -32,6 +40,8 @@ class EvaluationResult:
     passed: bool
     score: float
     notes: str = ""
+    reference_answer: Optional[str] = None  # when set, standard metrics (BLEU, ROUGE, etc.) are computed
+    extra_metrics: Optional[Dict[str, float]] = None  # BLEU, ROUGE-1/2/L, embedding_sim, exact_match, token_f1, llm_judge
 
 
 @dataclass
@@ -44,6 +54,7 @@ class EvaluationReport:
     failed_tests: int = 0
     category_scores: Dict[str, float] = field(default_factory=dict)
     results: List[EvaluationResult] = field(default_factory=list)
+    standard_metrics_agg: Dict[str, float] = field(default_factory=dict)  # mean BLEU, ROUGE, etc. over tests with reference
 
     @property
     def overall_score(self) -> float:
@@ -60,6 +71,7 @@ class EvaluationReport:
             "failed_tests": self.failed_tests,
             "overall_score": f"{self.overall_score:.1f}%",
             "category_scores": {k: f"{v:.1f}%" for k, v in self.category_scores.items()},
+            "standard_metrics_agg": self.standard_metrics_agg,
             "results": [
                 {
                     "category": r.category,
@@ -68,6 +80,7 @@ class EvaluationReport:
                     "passed": r.passed,
                     "score": r.score,
                     "response": r.actual_response[:200] + "..." if len(r.actual_response) > 200 else r.actual_response,
+                    **({"extra_metrics": r.extra_metrics} if r.extra_metrics else {}),
                 }
                 for r in self.results
             ]
@@ -176,26 +189,20 @@ def _keywords_from_answer(answer: str, max_keywords: int = 15, min_word_len: int
     return keywords if keywords else words[:max_keywords]
 
 
-def _load_holdout_jsonl(path: str) -> List[Dict[str, Any]]:
-    """Load JSONL holdout file."""
-    data = []
-    with open(path, 'r', encoding='utf-8') as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                try:
-                    data.append(json.loads(line))
-                except json.JSONDecodeError:
-                    continue
-    return data
-
-
 class ModelEvaluator:
     """Evaluator for fine-tuned QA models."""
 
-    def __init__(self, model_path: str, base_model: str = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"):
+    def __init__(
+        self,
+        model_path: str,
+        base_model: str = "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+        use_embedding: bool = True,
+        use_llm_judge: bool = False,
+    ):
         self.model_path = model_path
         self.base_model = base_model
+        self.use_embedding = use_embedding
+        self.use_llm_judge = use_llm_judge
         self.inference = None
         self.report = EvaluationReport(
             model_path=model_path,
@@ -343,7 +350,7 @@ class ModelEvaluator:
     def run_holdout_tests(self, test_data_path: str) -> List[EvaluationResult]:
         """Run evaluation on the holdout test set (saved at training time)."""
         results = []
-        items = _load_holdout_jsonl(test_data_path)
+        items = load_jsonl(test_data_path)
         if not items:
             print(f"Warning: No examples in holdout file {test_data_path}")
             return results
@@ -374,6 +381,17 @@ class ModelEvaluator:
             expected_keywords = _keywords_from_answer(expected_answer)
             passed, score, matched = check_response_quality(response, expected_keywords)
 
+            # Standard metrics (BLEU, ROUGE, embedding sim, exact match, token F1, optional LLM judge)
+            inference_fn = (lambda p: self.generate_response(p, use_history=False)) if self.use_llm_judge else None
+            extra_metrics = compute_all_metrics(
+                reference=expected_answer,
+                candidate=response,
+                question=input_text,
+                inference_fn=inference_fn,
+                use_embedding=self.use_embedding,
+                use_llm_judge=self.use_llm_judge,
+            )
+
             results.append(
                 EvaluationResult(
                     category="holdout",
@@ -384,6 +402,8 @@ class ModelEvaluator:
                     passed=passed,
                     score=score,
                     notes=f"Matched: {matched}",
+                    reference_answer=expected_answer,
+                    extra_metrics=extra_metrics if extra_metrics else None,
                 )
             )
 
@@ -450,6 +470,11 @@ class ModelEvaluator:
             cat_passed = sum(1 for r in cat_results if r.passed)
             self.report.category_scores[category] = (cat_passed / len(cat_results)) * 100
 
+        # Aggregate standard metrics (BLEU, ROUGE, etc.) over results that have reference + extra_metrics
+        results_with_metrics = [r for r in all_results if getattr(r, "extra_metrics", None)]
+        if results_with_metrics:
+            self.report.standard_metrics_agg = aggregate_metrics(results_with_metrics)
+
         return self.report
 
     def print_report(self):
@@ -464,6 +489,11 @@ class ModelEvaluator:
         print(f"Timestamp: {report.timestamp}")
         print(f"\nOverall Score: {report.overall_score:.1f}%")
         print(f"Tests Passed: {report.passed_tests}/{report.total_tests}")
+
+        if report.standard_metrics_agg:
+            print("\nStandard metrics (on tests with reference, e.g. holdout):")
+            for name, value in sorted(report.standard_metrics_agg.items()):
+                print(f"  {name}: {value:.4f}")
 
         print("\nCategory Scores:")
         for category, score in report.category_scores.items():
@@ -553,10 +583,27 @@ def main():
         help="Evaluate only on --test_data (no preset greeting/gratitude/multiturn tests). Requires --test_data."
     )
 
+    parser.add_argument(
+        "--no_embedding",
+        action="store_true",
+        help="Disable embedding/semantic similarity metric (avoids loading sentence-transformers)."
+    )
+
+    parser.add_argument(
+        "--llm_judge",
+        action="store_true",
+        help="Enable LLM-as-judge: use the same model to rate each response 0-1 (slower)."
+    )
+
     args = parser.parse_args()
 
     # Create evaluator
-    evaluator = ModelEvaluator(args.model_path, args.base_model)
+    evaluator = ModelEvaluator(
+        args.model_path,
+        args.base_model,
+        use_embedding=not args.no_embedding,
+        use_llm_judge=args.llm_judge,
+    )
 
     # Load model unless dry run
     if not args.dry_run:
