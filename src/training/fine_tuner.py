@@ -15,10 +15,12 @@ Features:
 import os
 import json
 import argparse
+import random
 import torch
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from datasets import Dataset
+from pathlib import Path
 from transformers import (
     TrainingArguments,
     Trainer,
@@ -83,10 +85,23 @@ class DataCollatorForCompletionOnly:
         return batch
 
 
-def load_dataset(dataset_path, tokenizer, max_length=2048):
+# Default split: 80% train, 10% validation, 10% holdout (evaluation)
+TRAIN_RATIO = 0.8
+VAL_RATIO = 0.1
+TEST_RATIO = 0.1
+SPLIT_SEED = 42
+
+
+def load_dataset(
+    dataset_path: str,
+    tokenizer,
+    max_length: int = 2048,
+    holdout_output_path: Optional[str] = None,
+) -> Tuple[Dataset, Dataset]:
     """
-    Load and format QA dataset for training.
+    Load and format QA dataset; split into train (80%), validation (10%), and holdout test (10%).
     Supports both single-turn (question/answer) and multi-turn (input/output) formats.
+    Returns (train_dataset, eval_dataset). Saves holdout examples to holdout_output_path if set.
     """
     print(f"Loading dataset from: {dataset_path}")
 
@@ -101,12 +116,12 @@ def load_dataset(dataset_path, tokenizer, max_length=2048):
 
     print(f"Loaded {len(examples)} examples")
 
+    # Filter to valid examples and keep parallel list of formatted texts
     formatted_texts = []
+    valid_examples = []
     for example in examples:
-        # Support multi-turn format (input/output)
         if 'input' in example and 'output' in example:
             text = f"<|system|>\n{SYSTEM_PROMPT}</s>\n{example['input']}{example['output']}</s>"
-        # Support single-turn format (question/answer)
         elif 'question' in example and 'answer' in example:
             question = example['question'].strip()
             answer = example['answer'].strip()
@@ -114,10 +129,39 @@ def load_dataset(dataset_path, tokenizer, max_length=2048):
         else:
             continue
         formatted_texts.append(text)
+        valid_examples.append(example)
 
-    print(f"Formatted {len(formatted_texts)} training examples")
+    n = len(valid_examples)
+    if n == 0:
+        raise ValueError("No valid examples in dataset")
 
-    dataset = Dataset.from_dict({"text": formatted_texts})
+    # Split 80% train, 10% validation, 10% holdout
+    rng = random.Random(SPLIT_SEED)
+    indices = list(range(n))
+    rng.shuffle(indices)
+    n_train = int(n * TRAIN_RATIO)
+    n_val = int(n * VAL_RATIO)
+    n_test = n - n_train - n_val
+    train_idx = indices[:n_train]
+    val_idx = indices[n_train : n_train + n_val]
+    test_idx = indices[n_train + n_val :]
+
+    print(f"Split: train={len(train_idx)}, validation={len(val_idx)}, holdout (evaluation)={len(test_idx)}")
+
+    # Save holdout set for evaluation
+    if holdout_output_path:
+        Path(holdout_output_path).parent.mkdir(parents=True, exist_ok=True)
+        with open(holdout_output_path, 'w', encoding='utf-8') as f:
+            for i in test_idx:
+                f.write(json.dumps(valid_examples[i], ensure_ascii=False) + '\n')
+        print(f"Holdout test set saved to: {holdout_output_path}")
+
+    # Build train and val datasets
+    train_texts = [formatted_texts[i] for i in train_idx]
+    val_texts = [formatted_texts[i] for i in val_idx]
+
+    train_dataset = Dataset.from_dict({"text": train_texts})
+    eval_dataset = Dataset.from_dict({"text": val_texts})
 
     def tokenize_function(examples):
         return tokenizer(
@@ -127,28 +171,26 @@ def load_dataset(dataset_path, tokenizer, max_length=2048):
             max_length=max_length
         )
 
-    tokenized_dataset = dataset.map(
+    train_dataset = train_dataset.map(
         tokenize_function,
         batched=True,
-        remove_columns=dataset.column_names
+        remove_columns=train_dataset.column_names
+    )
+    eval_dataset = eval_dataset.map(
+        tokenize_function,
+        batched=True,
+        remove_columns=eval_dataset.column_names
     )
 
-    return tokenized_dataset
+    return train_dataset, eval_dataset
 
 
-def train(model, tokenizer, dataset, output_dir,
+def train(model, tokenizer, train_dataset, eval_dataset, output_dir,
           num_train_epochs, per_device_train_batch_size,
           learning_rate, warmup_steps, logging_steps, save_steps,
           gradient_accumulation_steps=8, early_stopping_patience=3):
     """Train the model using supervised fine-tuning with efficiency optimizations."""
-    print(f"Training with {len(dataset)} examples")
-
-    # Split dataset for train/validation (90/10)
-    split_dataset = dataset.train_test_split(test_size=0.1, seed=42)
-    train_dataset = split_dataset['train']
-    eval_dataset = split_dataset['test']
-
-    print(f"Train set: {len(train_dataset)}, Validation set: {len(eval_dataset)}")
+    print(f"Training with {len(train_dataset)} examples, validating on {len(eval_dataset)} examples")
 
     training_args = TrainingArguments(
         output_dir=output_dir,
@@ -221,20 +263,33 @@ def main():
     parser.add_argument("--max_seq_length", type=int, default=2048)
     parser.add_argument("--early_stopping_patience", type=int, default=3,
                         help="Number of evaluations with no improvement before stopping")
+    parser.add_argument("--holdout_output_path", type=str, default=None,
+                        help="Path to save holdout test set (10%%) for evaluation. Default: same dir as dataset with name training_test.jsonl")
 
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
+
+    # Default holdout path: same directory as dataset, name training_test.jsonl
+    holdout_path = args.holdout_output_path
+    if holdout_path is None:
+        dataset_dir = os.path.dirname(args.dataset_path)
+        holdout_path = os.path.join(dataset_dir, "training_test.jsonl")
 
     model, tokenizer = load_model_and_tokenizer(
         args.model_name,
         for_training=True,
         enable_gradient_checkpointing=True
     )
-    dataset = load_dataset(args.dataset_path, tokenizer, max_length=args.max_seq_length)
+    train_dataset, eval_dataset = load_dataset(
+        args.dataset_path,
+        tokenizer,
+        max_length=args.max_seq_length,
+        holdout_output_path=holdout_path,
+    )
 
     train(
-        model, tokenizer, dataset, args.output_dir,
+        model, tokenizer, train_dataset, eval_dataset, args.output_dir,
         args.num_train_epochs, args.per_device_train_batch_size,
         args.learning_rate, args.warmup_steps,
         args.logging_steps, args.save_steps,

@@ -15,6 +15,7 @@ Usage:
 import argparse
 import json
 import os
+import re
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -167,6 +168,28 @@ def check_response_quality(response: str, expected_keywords: List[str]) -> tuple
     return passed, score, matched
 
 
+def _keywords_from_answer(answer: str, max_keywords: int = 15, min_word_len: int = 4) -> List[str]:
+    """Extract significant words from ground-truth answer for holdout scoring."""
+    words = re.findall(r'\b[a-zA-Z]+\b', answer.lower())
+    # Prefer longer, substantive words
+    keywords = list(dict.fromkeys(w for w in words if len(w) >= min_word_len))[:max_keywords]
+    return keywords if keywords else words[:max_keywords]
+
+
+def _load_holdout_jsonl(path: str) -> List[Dict[str, Any]]:
+    """Load JSONL holdout file."""
+    data = []
+    with open(path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                try:
+                    data.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    return data
+
+
 class ModelEvaluator:
     """Evaluator for fine-tuned QA models."""
 
@@ -182,7 +205,7 @@ class ModelEvaluator:
     def load_model(self):
         """Load the model for inference."""
         try:
-            from inference import QAInference
+            from src.inference.inference import QAInference
             self.inference = QAInference(
                 base_model_name=self.base_model,
                 peft_model_path=self.model_path,
@@ -317,29 +340,102 @@ class ModelEvaluator:
                 results.append(result)
         return results
 
-    def run_all_tests(self) -> EvaluationReport:
-        """Run all evaluation tests."""
+    def run_holdout_tests(self, test_data_path: str) -> List[EvaluationResult]:
+        """Run evaluation on the holdout test set (saved at training time)."""
+        results = []
+        items = _load_holdout_jsonl(test_data_path)
+        if not items:
+            print(f"Warning: No examples in holdout file {test_data_path}")
+            return results
+
+        for i, item in enumerate(items):
+            self.clear_history()
+            input_text = ""
+            if "question" in item and "answer" in item:
+                question = item["question"].strip()
+                expected_answer = item["answer"].strip()
+                input_text = question
+                response = self.generate_response(question, use_history=False)
+            elif "input" in item and "output" in item:
+                # Multi-turn: replay conversation then score last response
+                raw_input = item["input"]
+                expected_answer = item["output"].strip()
+                user_turns = re.findall(r"<\|user\|>\s*\n(.*?)</s>", raw_input, re.DOTALL)
+                user_turns = [t.strip() for t in user_turns if t.strip()]
+                if not user_turns:
+                    continue
+                input_text = user_turns[-1]
+                for turn in user_turns[:-1]:
+                    self.generate_response(turn, use_history=True)
+                response = self.generate_response(user_turns[-1], use_history=True)
+            else:
+                continue
+
+            expected_keywords = _keywords_from_answer(expected_answer)
+            passed, score, matched = check_response_quality(response, expected_keywords)
+
+            results.append(
+                EvaluationResult(
+                    category="holdout",
+                    test_name=f"holdout_{i+1}",
+                    input_text=input_text,
+                    expected_keywords=expected_keywords,
+                    actual_response=response,
+                    passed=passed,
+                    score=score,
+                    notes=f"Matched: {matched}",
+                )
+            )
+
+        return results
+
+    def run_all_tests(
+        self,
+        test_data_path: Optional[str] = None,
+        test_data_only: bool = False,
+    ) -> EvaluationReport:
+        """Run evaluation tests. If test_data_only is True, run only on test_data_path (no preset tests)."""
         print("\n" + "=" * 60)
         print("RUNNING MODEL EVALUATION")
         print("=" * 60)
 
-        # Run all test categories
         all_results = []
 
-        print("\n[1/5] Running greeting tests...")
-        all_results.extend(self.run_greeting_tests())
+        if test_data_only:
+            if not test_data_path or not os.path.isfile(test_data_path):
+                print(f"\nError: --test_data_only requires a valid --test_data path. Got: {test_data_path}")
+                self.report.results = []
+                self.report.total_tests = 0
+                self.report.passed_tests = 0
+                self.report.failed_tests = 0
+                return self.report
+            print("\n[1/1] Running evaluation on provided test data only (no preset tests)...")
+            all_results.extend(self.run_holdout_tests(test_data_path))
+        else:
+            step = 1
+            total_steps = 6 if (test_data_path and os.path.isfile(test_data_path)) else 5
 
-        print("[2/5] Running gratitude tests...")
-        all_results.extend(self.run_gratitude_tests())
+            if test_data_path and os.path.isfile(test_data_path):
+                print(f"\n[1/{total_steps}] Running holdout (test set) evaluation...")
+                all_results.extend(self.run_holdout_tests(test_data_path))
+                step = 2
+            elif test_data_path:
+                print(f"\nWarning: Holdout file not found: {test_data_path}, skipping holdout evaluation")
 
-        print("[3/5] Running farewell tests...")
-        all_results.extend(self.run_farewell_tests())
-
-        print("[4/5] Running rephrased question tests...")
-        all_results.extend(self.run_rephrased_question_tests())
-
-        print("[5/5] Running multi-turn tests...")
-        all_results.extend(self.run_multiturn_tests())
+            print(f"\n[{step}/{total_steps}] Running greeting tests...")
+            all_results.extend(self.run_greeting_tests())
+            step += 1
+            print(f"[{step}/{total_steps}] Running gratitude tests...")
+            all_results.extend(self.run_gratitude_tests())
+            step += 1
+            print(f"[{step}/{total_steps}] Running farewell tests...")
+            all_results.extend(self.run_farewell_tests())
+            step += 1
+            print(f"[{step}/{total_steps}] Running rephrased question tests...")
+            all_results.extend(self.run_rephrased_question_tests())
+            step += 1
+            print(f"[{step}/{total_steps}] Running multi-turn tests...")
+            all_results.extend(self.run_multiturn_tests())
 
         # Compile report
         self.report.results = all_results
@@ -386,14 +482,21 @@ class ModelEvaluator:
 
         print("\n" + "=" * 60)
 
-        # Success criteria check
+        # Success criteria check (only for categories that were run)
         print("\nSUCCESS CRITERIA CHECK:")
-        criteria = [
-            ("Greetings work", report.category_scores.get("greetings", 0) >= 80),
-            ("Rephrased questions work", report.category_scores.get("rephrased_questions", 0) >= 60),
-            ("Multi-turn works", report.category_scores.get("multiturn", 0) >= 60),
-            ("Overall score >= 70%", report.overall_score >= 70),
-        ]
+        criteria = []
+        thresholds = {
+            "greetings": (80, "Greetings work"),
+            "gratitude": (80, "Gratitude responses"),
+            "farewells": (80, "Farewells work"),
+            "rephrased_questions": (60, "Rephrased questions work"),
+            "multiturn": (60, "Multi-turn works"),
+            "holdout": (50, "Holdout (test set) score"),
+        }
+        for cat, score in report.category_scores.items():
+            thresh, label = thresholds.get(cat, (50, f"{cat} score"))
+            criteria.append((label, score >= thresh))
+        criteria.append(("Overall score >= 70%", report.overall_score >= 70))
         for name, passed in criteria:
             status = "PASS" if passed else "FAIL"
             print(f"  [{status}] {name}")
@@ -437,6 +540,19 @@ def main():
         help="Run without loading model (for testing the evaluation framework)"
     )
 
+    parser.add_argument(
+        "--test_data",
+        type=str,
+        default=None,
+        help="Path to holdout test set (JSONL) for evaluation. If provided, evaluation runs on this set first (recommended)."
+    )
+
+    parser.add_argument(
+        "--test_data_only",
+        action="store_true",
+        help="Evaluate only on --test_data (no preset greeting/gratitude/multiturn tests). Requires --test_data."
+    )
+
     args = parser.parse_args()
 
     # Create evaluator
@@ -447,8 +563,11 @@ def main():
         if not evaluator.load_model():
             print("Warning: Could not load model, running in dry-run mode")
 
-    # Run evaluation
-    report = evaluator.run_all_tests()
+    # Run evaluation (optionally only on test_data, or full suite with optional holdout)
+    report = evaluator.run_all_tests(
+        test_data_path=args.test_data,
+        test_data_only=args.test_data_only,
+    )
 
     # Print report
     evaluator.print_report()

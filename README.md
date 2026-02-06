@@ -11,6 +11,7 @@ A complete end-to-end Python pipeline for generating question-answer datasets fr
 - [Detailed Usage](#detailed-usage)
   - [Full Pipeline (Recommended)](#full-pipeline-recommended)
   - [Step-by-Step Instructions](#step-by-step-instructions)
+  - [Evaluate existing model on documents](#evaluate-existing-model-on-documents)
 - [Configuration](#configuration)
 - [Data Formats](#data-formats)
 - [Training Features](#training-features)
@@ -31,15 +32,17 @@ A complete end-to-end Python pipeline for generating question-answer datasets fr
 - **Efficient Training**: LoRA fine-tuning with mixed precision and gradient checkpointing
 - **Early Stopping**: Automatic training termination to prevent overfitting
 - **Interactive Chatbot**: Run fine-tuned models with conversation history
-- **Model Evaluation**: Comprehensive testing on greetings, paraphrases, and follow-ups
+- **Model Evaluation**: Comprehensive testing on holdout set, greetings, paraphrases, and follow-ups
+- **Evaluate on new data**: Use an existing trained model and evaluate it on QA generated from any document folder
 
 ### Advanced Features
 - Response-only loss masking (only train on assistant responses)
 - Semantic duplicate detection
-- Train/validation split with validation loss tracking
+- **Train/validation/holdout split (80/10/10)**: Training data is split into train, validation (for early stopping), and a holdout test set used for evaluation
 - Configurable hyperparameters via config.py
 - Comprehensive unit test suite
 - End-to-end pipeline script with model selection
+- **Evaluate-on-documents script**: Generate QA from a document folder and evaluate an existing trained model on that data only (no preset tests)
 
 ## Project Structure
 
@@ -70,7 +73,8 @@ QA_bot_USDA_SHSU-version2.0/
 │       ├── llm_utils.py             # LLM generation utilities
 │       └── file_processor.py        # Document processing
 ├── scripts/
-│   └── run_pipeline.sh              # End-to-end pipeline script
+│   ├── run_pipeline.sh              # End-to-end pipeline script
+│   └── run_eval_on_documents.sh     # Evaluate existing model on QA from a document folder
 ├── tests/                           # Unit test suite
 │   ├── conftest.py                  # Test fixtures
 │   ├── test_conversational_data.py
@@ -138,9 +142,9 @@ This will:
 2. Clean and validate the data
 3. Create multi-turn conversation examples
 4. Merge all datasets
-5. Fine-tune the model with LoRA
-6. Save the fine-tuned model
-7. Evaluate model performance
+5. Fine-tune the model with LoRA (data is split 80% train, 10% validation, 10% holdout)
+6. Save the fine-tuned model and the holdout test set
+7. Evaluate model performance on the holdout set plus preset tests (greetings, etc.)
 
 ### 3. Chat with Your Model
 
@@ -188,8 +192,10 @@ The `run_pipeline.sh` script provides a complete end-to-end workflow with extens
 | `-a, --augment-paraphrases NUM` | Number of paraphrase variations | 0 |
 | `--skip-generation` | Skip QA generation (use existing dataset) | false |
 | `--skip-training` | Skip training step | false |
-| `--eval-only` | Only run evaluation | false |
+| `--eval-only` | Only run evaluation (uses existing model and, if present, holdout set in output-dir) | false |
 | `-h, --help` | Show help message | - |
+
+After training, the pipeline saves a **holdout test set** to `output-dir/training_test.jsonl` and runs evaluation on it together with preset tests (greetings, etc.). With `--eval-only`, evaluation uses that holdout file if it exists.
 
 #### Advanced Pipeline Examples
 
@@ -334,7 +340,7 @@ python src/dataset/merge_datasets.py \
 
 #### 5. Fine-tune Model
 
-Train the model with LoRA:
+Train the model with LoRA. The dataset is automatically split into **80% train**, **10% validation** (for early stopping), and **10% holdout** (saved for evaluation; not used for training):
 
 ```bash
 python src/training/fine_tuner.py \
@@ -347,9 +353,12 @@ python src/training/fine_tuner.py \
     --early_stopping_patience 3
 ```
 
+A holdout test set is written to `data_output/training_test.jsonl` by default (or to `--holdout_output_path` if specified).
+
 **Training Options:**
 - `--dataset_path`: Path to training dataset
 - `--output_dir`: Output directory for model weights
+- `--holdout_output_path`: Where to save the 10% holdout set for evaluation (default: same dir as dataset, file `training_test.jsonl`)
 - `--model_name`: Base model to fine-tune
 - `--num_train_epochs`: Number of training epochs
 - `--per_device_train_batch_size`: Batch size per GPU
@@ -365,21 +374,26 @@ python src/training/fine_tuner.py \
 
 #### 6. Evaluate Model
 
-Test model performance:
+Test model performance. When the pipeline runs, it evaluates on the **holdout set** (`training_test.jsonl`) first, then on preset tests (greetings, gratitude, farewells, rephrased questions, multi-turn):
 
 ```bash
 python src/inference/evaluate.py \
     --model_path fine_tuned_weights \
     --base_model TinyLlama/TinyLlama-1.1B-Chat-v1.0 \
-    --output data_output/evaluation_report.json
+    --output data_output/evaluation_report.json \
+    --test_data data_output/training_test.jsonl
 ```
 
-**Evaluation Tests:**
+**Evaluation options:**
+- `--test_data`: Path to a JSONL test set (e.g. holdout set). When provided, evaluation runs on this data first. The pipeline passes the saved holdout file automatically.
+- `--test_data_only`: Evaluate **only** on the file given by `--test_data` (no preset greeting/gratitude/multiturn tests). Use this when you want results for a specific dataset only.
+
+**Evaluation tests (when not using `--test_data_only`):**
+- Holdout (test set) — model answers from the held-out data; scored by keyword match to ground truth
 - Greeting responses
+- Gratitude and farewells
 - Paraphrased questions
-- Follow-up questions
-- Coreference resolution
-- General QA accuracy
+- Follow-up questions and coreference resolution
 
 #### 7. Interactive Chat
 
@@ -405,6 +419,50 @@ python src/inference/inference.py \
     --peft_model fine_tuned_weights \
     --input_file questions.txt \
     --output_file answers.txt
+```
+
+### Evaluate existing model on documents
+
+If you already have a trained model and want to evaluate it on **new data** (e.g. a different document folder), use the dedicated script. It (1) reads a document folder, (2) generates question-answer pairs from those documents (same as the training pipeline), and (3) runs evaluation **only** on that generated data (no preset greeting/farewell tests). Results are saved in the output directory.
+
+**Usage:**
+
+```bash
+./scripts/run_eval_on_documents.sh --peft-model fine_tuned_weights --input-dir data_input --output-dir eval_output
+```
+
+**Required:**
+- `--peft-model PATH` — Path to your trained model weights (LoRA adapter or full model)
+
+**Options:**
+- `--input-dir` / `-i` — Folder containing documents (.txt, .md, .docx). Default: `data_input`
+- `--output-dir` / `-o` — Where to save generated QA and the evaluation report. Default: `eval_output`
+- `--model` / `-m` — Base model name used to **generate** the QA (not the model being evaluated). Default: TinyLlama
+- `--questions` / `-q` — Number of questions per chunk when generating QA. Default: 3
+
+**Output files (in the output directory):**
+- `generated_qa_eval.jsonl` — Generated question-answer pairs from the documents
+- `evaluation_report.json` — Evaluation report (same format as the main pipeline), with scores only for this generated data
+
+**Example: evaluate a trained model on a new set of docs**
+
+```bash
+./scripts/run_eval_on_documents.sh \
+  --peft-model fine_tuned_weights \
+  --input-dir ./new_docs \
+  --output-dir ./eval_new_docs \
+  --questions 5
+```
+
+To evaluate **only** on a specific test file (e.g. your own JSONL) without generating from documents, run the evaluation script directly:
+
+```bash
+python src/inference/evaluate.py \
+  --model_path fine_tuned_weights \
+  --base_model TinyLlama/TinyLlama-1.1B-Chat-v1.0 \
+  --test_data my_test_data.jsonl \
+  --test_data_only \
+  --output my_evaluation_report.json
 ```
 
 ## Configuration
@@ -515,10 +573,11 @@ Monitors validation loss and stops training when:
 - Prevents overfitting
 - Saves training time
 
-### Train/Validation Split
-- Automatically splits data 90/10
-- Tracks validation loss each epoch
-- Logs training metrics
+### Train/Validation/Holdout Split
+- Automatically splits data **80% train**, **10% validation**, **10% holdout**
+- Train set is used for gradient updates; validation set is used for early stopping and selecting the best checkpoint
+- Holdout set is saved to a JSONL file (e.g. `training_test.jsonl`) and is **not** used during training; the pipeline uses it for evaluation so you get an unbiased estimate of performance on unseen data
+- Tracks validation loss each epoch and logs training metrics
 
 ### LoRA (Low-Rank Adaptation)
 - Parameter-efficient fine-tuning
@@ -704,6 +763,19 @@ python src/training/fine_tuner.py \
     --augment-paraphrases 7 \
     --epochs 20 \
     --batch-size 2
+```
+
+### Example 5: Evaluate existing model on a new document folder
+
+```bash
+# You already have trained weights and want to see how the model does on a new set of documents
+./scripts/run_eval_on_documents.sh \
+    --peft-model fine_tuned_weights \
+    --input-dir ./new_eval_docs \
+    --output-dir ./eval_results \
+    --questions 5
+
+# Output: eval_results/generated_qa_eval.jsonl and eval_results/evaluation_report.json
 ```
 
 ## Contributing

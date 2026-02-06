@@ -177,7 +177,8 @@ if [ "$EVAL_ONLY" = true ]; then
     python /home/ybd002/llm/src/inference/evaluate.py \
         --model_path "$OUTPUT_MODEL_DIR" \
         --base_model "$MODEL_NAME" \
-        --output "$OUTPUT_DIR/evaluation_report.json"
+        --output "$OUTPUT_DIR/evaluation_report.json" \
+        --test_data "$OUTPUT_DIR/training_test.jsonl"
 
     if [ -f "$OUTPUT_DIR/evaluation_report.json" ]; then
         echo ""
@@ -298,7 +299,8 @@ if [ "$SKIP_TRAINING" = false ]; then
         --num_train_epochs "$NUM_EPOCHS" \
         --per_device_train_batch_size "$BATCH_SIZE" \
         --gradient_accumulation_steps 8 \
-        --early_stopping_patience 3
+        --early_stopping_patience 3 \
+        --holdout_output_path "$OUTPUT_DIR/training_test.jsonl"
 
     if [ -d "$OUTPUT_MODEL_DIR" ]; then
         echo "✓ Fine-tuning completed successfully!"
@@ -336,7 +338,8 @@ if [ -d "$OUTPUT_MODEL_DIR" ]; then
     python /home/ybd002/llm/src/inference/evaluate.py \
         --model_path "$OUTPUT_MODEL_DIR" \
         --base_model "$MODEL_NAME" \
-        --output "$OUTPUT_DIR/evaluation_report.json"
+        --output "$OUTPUT_DIR/evaluation_report.json" \
+        --test_data "$OUTPUT_DIR/training_test.jsonl"
 
     if [ -f "$OUTPUT_DIR/evaluation_report.json" ]; then
         echo "✓ Evaluation completed: $OUTPUT_DIR/evaluation_report.json"
@@ -362,11 +365,14 @@ echo "  1. QA Dataset:        $OUTPUT_DIR/qa_dataset.jsonl"
 echo "  2. Cleaned Dataset:   $OUTPUT_DIR/qa_cleaned.jsonl ($QA_COUNT pairs)"
 echo "  3. Multi-turn Data:   $OUTPUT_DIR/multiturn.jsonl ($MULTITURN_COUNT examples)"
 echo "  4. Training Dataset:  $OUTPUT_DIR/training_dataset.jsonl ($DATASET_SIZE examples)"
+if [ -f "$OUTPUT_DIR/training_test.jsonl" ]; then
+    echo "  5. Holdout Test Set:   $OUTPUT_DIR/training_test.jsonl (for evaluation)"
+fi
 if [ -d "$OUTPUT_MODEL_DIR" ]; then
-    echo "  5. Fine-tuned Model:  $OUTPUT_MODEL_DIR/ ($(du -sh "$OUTPUT_MODEL_DIR" | cut -f1))"
+    echo "  6. Fine-tuned Model:  $OUTPUT_MODEL_DIR/ ($(du -sh "$OUTPUT_MODEL_DIR" | cut -f1))"
 fi
 if [ -f "$OUTPUT_DIR/evaluation_report.json" ]; then
-    echo "  6. Evaluation Report: $OUTPUT_DIR/evaluation_report.json"
+    echo "  7. Evaluation Report: $OUTPUT_DIR/evaluation_report.json"
 fi
 echo ""
 echo "=================================="
@@ -376,8 +382,8 @@ echo ""
 echo "1. Test the model interactively:"
 echo "   python /home/ybd002/llm/src/inference/inference.py --peft_model $OUTPUT_MODEL_DIR --interactive"
 echo ""
-echo "2. Run batch evaluation:"
-echo "   python /home/ybd002/llm/src/inference/evaluate.py --model_path $OUTPUT_MODEL_DIR --base_model \"$MODEL_NAME\""
+echo "2. Run batch evaluation (with holdout test set):"
+echo "   python /home/ybd002/llm/src/inference/evaluate.py --model_path $OUTPUT_MODEL_DIR --base_model \"$MODEL_NAME\" --test_data $OUTPUT_DIR/training_test.jsonl"
 echo ""
 echo "3. View evaluation results:"
 echo "   cat $OUTPUT_DIR/evaluation_report.json"
