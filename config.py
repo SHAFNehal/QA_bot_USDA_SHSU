@@ -120,6 +120,22 @@ DEVICE_CONFIG = {
     "cuda": "Force CUDA usage"
 }
 
+# RAG (Retrieval-Augmented Generation) configuration
+RAG_CONFIG = {
+    "top_k": 5,
+    "chunk_size": FILE_PROCESSING_CONFIG.get("max_chunk_size", 2000) // 2,  # 1000 default
+    "overlap": FILE_PROCESSING_CONFIG.get("min_chunk_size", 100),
+    "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+    "use_hybrid": False,
+    "collection_name": "rag_docs",
+}
+
+def get_rag_config(**overrides):
+    """Get RAG configuration with optional overrides."""
+    config = RAG_CONFIG.copy()
+    config.update(overrides)
+    return config
+
 def get_model_config(model_key: str = "tinyllama"):
     """Get configuration for a specific model."""
     return DEFAULT_MODELS.get(model_key, DEFAULT_MODELS["tinyllama"])

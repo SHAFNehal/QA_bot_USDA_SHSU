@@ -12,6 +12,7 @@ A complete end-to-end Python pipeline for generating question-answer datasets fr
   - [Full Pipeline (Recommended)](#full-pipeline-recommended)
   - [Step-by-Step Instructions](#step-by-step-instructions)
   - [Evaluate existing model on documents](#evaluate-existing-model-on-documents)
+- [RAG (Retrieval-Augmented Generation)](#rag-retrieval-augmented-generation)
 - [Configuration](#configuration)
 - [Data Formats](#data-formats)
 - [Training Features](#training-features)
@@ -464,6 +465,37 @@ python src/inference/evaluate.py \
   --test_data_only \
   --output my_evaluation_report.json
 ```
+
+## RAG (Retrieval-Augmented Generation)
+
+The project includes an optional **RAG pipeline** that uses a persistent vector store (Chroma) and optional hybrid retrieval (BM25) to answer questions from your documents. All components are open source (Chroma, sentence-transformers, rank_bm25, Hugging Face Transformers).
+
+- **Ingest:** Build an index from a document directory or JSONL file.
+- **Query:** Ask questions in interactive mode or with a single question; the pipeline retrieves relevant chunks and generates an answer with the configured LLM.
+
+**Quick start:**
+
+```bash
+# 1. Build the index (from a folder and/or JSONL)
+python -m src.rag.ingest --input-dir data_input --db-path rag_db
+
+# 2. Query (interactive or single question)
+python -m src.rag.query --db-path rag_db --interactive
+python -m src.rag.query --db-path rag_db "Your question here"
+```
+
+**`db-path`** is the directory where the Chroma database (and optional BM25 index) are stored. You can reuse the same path to append more documents or use `--replace` when ingesting to rebuild from scratch.
+
+**Use the pipeline in code:**
+
+```python
+from src.rag import RAGPipeline
+
+pipeline = RAGPipeline(db_path="rag_db", model_name="TinyLlama/TinyLlama-1.1B-Chat-v1.0")
+answer = pipeline.answer("Your question")
+```
+
+For full options (hybrid retrieval, JSONL input, chunk size, etc.), see [docs/rag_usage.md](docs/rag_usage.md).
 
 ## Configuration
 
