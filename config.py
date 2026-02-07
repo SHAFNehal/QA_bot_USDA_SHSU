@@ -136,6 +136,23 @@ def get_rag_config(**overrides):
     config.update(overrides)
     return config
 
+# Hybrid RAG (restate -> RAG + FT -> synthesize) configuration
+HYBRID_RAG_CONFIG = {
+    "small_llm_model": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+    "num_restatements": 5,
+    "per_query_top_k": 5,
+    "merged_retrieval_top_k": 12,
+    "max_new_tokens_restater": 256,
+    "max_new_tokens_synthesizer": 512,
+    "temperature": 0.7,
+}
+
+def get_hybrid_rag_config(**overrides):
+    """Get Hybrid RAG configuration with optional overrides."""
+    config = HYBRID_RAG_CONFIG.copy()
+    config.update(overrides)
+    return config
+
 def get_model_config(model_key: str = "tinyllama"):
     """Get configuration for a specific model."""
     return DEFAULT_MODELS.get(model_key, DEFAULT_MODELS["tinyllama"])

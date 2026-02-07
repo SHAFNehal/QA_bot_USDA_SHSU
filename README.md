@@ -13,6 +13,7 @@ A complete end-to-end Python pipeline for generating question-answer datasets fr
   - [Step-by-Step Instructions](#step-by-step-instructions)
   - [Evaluate existing model on documents](#evaluate-existing-model-on-documents)
 - [RAG (Retrieval-Augmented Generation)](#rag-retrieval-augmented-generation)
+  - [Hybrid RAG](#hybrid-rag)
 - [Configuration](#configuration)
 - [Data Formats](#data-formats)
 - [Training Features](#training-features)
@@ -496,6 +497,16 @@ answer = pipeline.answer("Your question")
 ```
 
 For full options (hybrid retrieval, JSONL input, chunk size, etc.), see [docs/rag_usage.md](docs/rag_usage.md).
+
+### Hybrid RAG
+
+A **Hybrid RAG** pipeline combines RAG with your fine-tuned model and a small LLM: the small LLM restates the question in 5 different ways; RAG retrieves from all 6 queries (original + restatements), merges results, and generates one RAG answer; the fine-tuned model answers the same 6 questions; the small LLM then synthesizes a single final answer from the RAG and FT candidates. Use it when you have both a RAG index and a fine-tuned model and want a single, high-confidence answer.
+
+```bash
+python -m src.Hybrid_RAG.query --db-path rag_db --peft-model fine_tuned_weights --base-model TinyLlama/TinyLlama-1.1B-Chat-v1.0 --interactive
+```
+
+See [docs/hybrid_rag_usage.md](docs/hybrid_rag_usage.md) for options and programmatic use.
 
 ## Configuration
 
