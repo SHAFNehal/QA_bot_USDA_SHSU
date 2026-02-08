@@ -14,6 +14,7 @@ A complete end-to-end Python pipeline for generating question-answer datasets fr
   - [Evaluate existing model on documents](#evaluate-existing-model-on-documents)
 - [RAG (Retrieval-Augmented Generation)](#rag-retrieval-augmented-generation)
   - [Hybrid RAG](#hybrid-rag)
+- [Chat GUI](#chat-gui)
 - [Configuration](#configuration)
 - [Data Formats](#data-formats)
 - [Training Features](#training-features)
@@ -21,6 +22,7 @@ A complete end-to-end Python pipeline for generating question-answer datasets fr
 - [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
 - [Examples](#examples)
+- [Documentation](#documentation)
 
 ## Features
 
@@ -34,8 +36,11 @@ A complete end-to-end Python pipeline for generating question-answer datasets fr
 - **Efficient Training**: LoRA fine-tuning with mixed precision and gradient checkpointing
 - **Early Stopping**: Automatic training termination to prevent overfitting
 - **Interactive Chatbot**: Run fine-tuned models with conversation history
-- **Model Evaluation**: Comprehensive testing on holdout set, greetings, paraphrases, and follow-ups
+- **Model Evaluation**: Comprehensive testing on holdout set with standard metrics (BLEU, ROUGE, embedding similarity, exact match, token F1; optional LLM-as-judge), plus preset tests (greetings, paraphrases, follow-ups)
 - **Evaluate on new data**: Use an existing trained model and evaluate it on QA generated from any document folder
+- **RAG pipeline**: Persistent vector store (Chroma), optional BM25 hybrid retrieval, ingest from documents or JSONL, query via CLI or Python API
+- **Hybrid RAG**: Combine RAG + fine-tuned model with a small LLM (restate question, merge retrievals, synthesize final answer)
+- **Chat GUI**: Streamlit interface to chat with Fine-tuned, RAG only, or Hybrid RAG; separate threads per mode; simple config file for non-technical users
 
 ### Advanced Features
 - Response-only loss masking (only train on assistant responses)
@@ -49,7 +54,7 @@ A complete end-to-end Python pipeline for generating question-answer datasets fr
 ## Project Structure
 
 ```
-QA_bot_USDA_SHSU-version2.0/
+QA_bot_USDA_SHSU/
 ├── src/
 │   ├── dataset/
 │   │   ├── __init__.py
@@ -68,32 +73,62 @@ QA_bot_USDA_SHSU-version2.0/
 │   ├── inference/
 │   │   ├── __init__.py
 │   │   ├── inference.py             # Interactive chatbot interface
-│   │   └── evaluate.py              # Model evaluation script
+│   │   ├── evaluate.py              # Model evaluation script
+│   │   └── metrics.py               # BLEU, ROUGE, embedding similarity, exact match, token F1
+│   ├── rag/                         # RAG pipeline (Chroma + optional BM25)
+│   │   ├── __init__.py
+│   │   ├── store.py                 # Vector store and hybrid retrieval
+│   │   ├── generator.py             # LLM generation with context
+│   │   ├── pipeline.py              # RAGPipeline: retrieve + generate
+│   │   ├── ingest.py                # CLI: build index from docs/JSONL
+│   │   └── query.py                 # CLI: interactive or single query
+│   ├── Hybrid_RAG/                  # Hybrid RAG (restate + RAG + FT + synthesize)
+│   │   ├── __init__.py
+│   │   ├── pipeline.py              # HybridRAGPipeline orchestrator
+│   │   ├── restater.py              # Small LLM: restate question 5 ways
+│   │   ├── synthesizer.py           # Small LLM: synthesize final answer
+│   │   ├── small_llm.py             # Shared small LLM loader
+│   │   └── query.py                 # CLI for hybrid RAG
 │   └── utils/
 │       ├── __init__.py
 │       ├── model_utils.py           # Centralized model loading
 │       ├── llm_utils.py             # LLM generation utilities
 │       └── file_processor.py        # Document processing
+├── GUI/                             # Streamlit chat interface
+│   ├── app.py                       # Chat app (Fine-tuned / RAG / Hybrid RAG)
+│   ├── gui_config.env               # Config for models and paths (key=value)
+│   └── README.md                    # How to run and edit config
 ├── scripts/
 │   ├── run_pipeline.sh              # End-to-end pipeline script
-│   └── run_eval_on_documents.sh     # Evaluate existing model on QA from a document folder
+│   ├── run_eval_on_documents.sh     # Evaluate existing model on QA from a document folder
+│   ├── run_pipeline_slurm.sh        # SLURM job for pipeline
+│   ├── run_pipeline_slurm_cpu.sh    # SLURM pipeline (CPU)
+│   ├── run_training_only_slurm.sh   # SLURM training only
+│   ├── run.slurm                    # SLURM run script
+│   ├── submit_pipeline.sh           # Submit pipeline to SLURM
+│   └── inference.slurm             # SLURM inference
+├── docs/
+│   ├── rag_usage.md                 # RAG ingest and query guide
+│   ├── hybrid_rag_usage.md          # Hybrid RAG guide
+│   └── qa_generation_guide.md       # QA generation guide
 ├── tests/                           # Unit test suite
-│   ├── conftest.py                  # Test fixtures
+│   ├── conftest.py
 │   ├── test_conversational_data.py
 │   ├── test_data_cleaner.py
 │   ├── test_multiturn_generator.py
 │   └── test_paraphrase_generator.py
+├── .streamlit/
+│   └── config.toml                 # Muted theme for Chat GUI
 ├── config.py                        # Configuration settings
-├── requirements.txt                 # Python dependencies
-├── README.md                        # This file
-├── CLAUDE.md                        # AI assistant guidance
-└── IMPLEMENTATION_PLAN.md           # Development roadmap
+├── pyproject.toml                   # Project metadata (optional)
+├── requirements.txt                # Python dependencies
+└── README.md                        # This file
 ```
 
 ## Installation
 
 ### Prerequisites
-- Python 3.8 or higher
+- Python 3.9 or higher (3.10+ recommended for latest chromadb/onnxruntime wheels)
 - CUDA-compatible GPU (optional, but recommended for faster training)
 - 8GB+ RAM (16GB+ recommended)
 
@@ -102,7 +137,7 @@ QA_bot_USDA_SHSU-version2.0/
 1. Clone the repository:
 ```bash
 git clone <repository-url>
-cd QA_bot_USDA_SHSU-version2.0
+cd QA_bot_USDA_SHSU-version2.1
 ```
 
 2. Install Python packages:
@@ -117,7 +152,11 @@ pip install -r requirements.txt
 - `datasets` - Dataset processing
 - `trl` - Transformer Reinforcement Learning
 - `python-docx` - DOCX file processing
-- `sentence-transformers` - Semantic similarity (optional)
+- `sentence-transformers` - Embeddings and semantic similarity (RAG, evaluation)
+- `chromadb` - Persistent vector store for RAG
+- `rank_bm25` - Sparse retrieval for optional RAG hybrid search
+- `streamlit` - Chat GUI
+- `rouge-score`, `nltk` - Evaluation metrics (BLEU, ROUGE, etc.)
 - `pytest` - Testing framework
 
 ## Quick Start
@@ -390,8 +429,10 @@ python src/inference/evaluate.py \
 - `--test_data`: Path to a JSONL test set (e.g. holdout set). When provided, evaluation runs on this data first. The pipeline passes the saved holdout file automatically.
 - `--test_data_only`: Evaluate **only** on the file given by `--test_data` (no preset greeting/gratitude/multiturn tests). Use this when you want results for a specific dataset only.
 
+**Evaluation metrics (on holdout/test data):** BLEU, ROUGE-1/2/L, embedding cosine similarity, exact match, token F1; optional LLM-as-judge. Results are aggregated and written to the evaluation report.
+
 **Evaluation tests (when not using `--test_data_only`):**
-- Holdout (test set) — model answers from the held-out data; scored by keyword match to ground truth
+- Holdout (test set) — model answers from the held-out data; scored with the metrics above
 - Greeting responses
 - Gratitude and farewells
 - Paraphrased questions
@@ -507,6 +548,18 @@ python -m src.Hybrid_RAG.query --db-path rag_db --peft-model fine_tuned_weights 
 ```
 
 See [docs/hybrid_rag_usage.md](docs/hybrid_rag_usage.md) for options and programmatic use.
+
+## Chat GUI
+
+A **Streamlit chat interface** lets you choose one of three modes and chat in the browser: **Fine-tuned model**, **RAG only**, or **Hybrid RAG**. Each mode has its own conversation thread. Human and assistant messages are clearly separated; the design is plain with muted colors. Configuration is done via a single file (`GUI/gui_config.env`, key=value with comments) so non-technical users can set model paths and options.
+
+**Run from project root:**
+
+```bash
+streamlit run GUI/app.py
+```
+
+Use the sidebar to select the mode (Fine-tuned / RAG only / Hybrid RAG). Edit `GUI/gui_config.env` to set `PEFT_MODEL_PATH`, `RAG_DB_PATH`, `BASE_MODEL`, and other options. See [GUI/README.md](GUI/README.md) for details.
 
 ## Configuration
 
@@ -821,6 +874,28 @@ python src/training/fine_tuner.py \
 # Output: eval_results/generated_qa_eval.jsonl and eval_results/evaluation_report.json
 ```
 
+### Example 6: Chat GUI (Fine-tuned, RAG, or Hybrid RAG)
+
+```bash
+# 1. Ensure gui_config.env has your paths (PEFT_MODEL_PATH, RAG_DB_PATH, etc.)
+# 2. Run the Streamlit app from project root
+streamlit run GUI/app.py
+
+# In the browser, select "Fine-tuned model", "RAG only", or "Hybrid RAG" in the sidebar and chat.
+```
+
+## Documentation
+
+Detailed guides are in the [docs/](docs/) folder:
+
+- [docs/qa_generation_guide.md](docs/qa_generation_guide.md) — Choosing number of questions per chunk
+- [docs/rag_usage.md](docs/rag_usage.md) — RAG ingest and query
+- [docs/hybrid_rag_usage.md](docs/hybrid_rag_usage.md) — Hybrid RAG pipeline
+- [docs/evaluation.md](docs/evaluation.md) — Evaluation metrics and how to run evaluation
+- [docs/README.md](docs/README.md) — Index of all documentation
+
+See [GUI/README.md](GUI/README.md) for the Chat GUI.
+
 ## Contributing
 
 Contributions are welcome! Please:
@@ -833,7 +908,7 @@ Contributions are welcome! Please:
 
 ## License
 
-This project is for research and educational purposes. Please check individual model licenses before commercial use.
+This project is licensed under the **MIT License**. See [LICENSE](LICENSE) for the full text. Please check individual model licenses (e.g. Hugging Face models) before commercial use.
 
 
 ## Acknowledgments

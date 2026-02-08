@@ -277,4 +277,11 @@ num_questions = 5-8  # Can handle more comprehensive generation
 5. **Balance coverage** with computational cost
 
 ### **Final Recommendation**
-For most use cases, start with **3 questions per chunk** and adjust based on your specific needs and constraints. 
+For most use cases, start with **3 questions per chunk** and adjust based on your specific needs and constraints.
+
+---
+
+## See also
+
+- **Pipeline and config:** The main [README](../README.md) describes the full pipeline (generate → clean → merge → train with 80/10/10 train/validation/holdout split) and where to set `num_questions` (e.g. `config.py` `DEFAULT_DATASET_CONFIG`, `--questions` in `run_pipeline.sh`, or `--num_questions` in `dataset_creator.py`).
+- **Evaluation:** After training, the holdout set is used for evaluation. See [evaluation.md](evaluation.md) for metrics and how to run evaluation (including on a document folder with `run_eval_on_documents.sh`). 
