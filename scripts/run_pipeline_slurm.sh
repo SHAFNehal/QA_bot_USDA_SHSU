@@ -2,33 +2,46 @@
 #SBATCH --job-name=qa_pipeline
 #SBATCH --output=logs/pipeline_%j.out
 #SBATCH --error=logs/pipeline_%j.err
-#SBATCH --time=24:00:00              # 24 saat timeout (ihtiyaca göre ayarlayın)
+#SBATCH --time=24:00:00              # 24 hour timeout (adjust as needed)
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8           # CPU sayısı (ihtiyaca göre ayarlayın)
-#SBATCH --mem=32G                    # RAM miktarı (ihtiyaca göre ayarlayın)
-#SBATCH --gres=gpu:1                 # GPU kullanımı (GPU yoksa bu satırı silin veya yorum yapın)
-#SBATCH --partition=gpu              # Partition adı (cluster'ınıza göre değiştirin: gpu, gpu_v100, etc.)
+#SBATCH --cpus-per-task=8           # Number of CPUs (adjust as needed)
+#SBATCH --mem=32G                    # RAM amount (adjust as needed)
+#SBATCH --gres=gpu:1                 # GPU usage (remove or comment if no GPU)
+#SBATCH --partition=gpu              # Partition name (change according to your cluster: gpu, gpu_v100, etc.)
 
-# SLURM ortam değişkenlerini ayarla
-export CUDA_VISIBLE_DEVICES=$SLURM_LOCALID
+# GPU selection: Use GPU_ID if set, otherwise use SLURM's assigned GPU
+if [ -n "$GPU_ID" ]; then
+    export CUDA_VISIBLE_DEVICES=$GPU_ID
+    echo "Using GPU: $GPU_ID (from GPU_ID environment variable)"
+else
+    export CUDA_VISIBLE_DEVICES=$SLURM_LOCALID
+    echo "Using GPU: $SLURM_LOCALID (assigned by SLURM)"
+fi
 
-# Log klasörünü oluştur
+# Create log directory
 mkdir -p logs
 
-# Aktif dizine geç
-cd $SLURM_SUBMIT_DIR
+# Change to submit directory
+cd "$SLURM_SUBMIT_DIR"
 
-# Python path'i ayarla (gerekirse)
-# export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+# Project root (submit dir). Override with PROJECT_ROOT env if needed.
+PROJECT_ROOT="${PROJECT_ROOT:-$SLURM_SUBMIT_DIR}"
+export PYTHONPATH="${PROJECT_ROOT}:${PYTHONPATH}"
 
-# Pipeline'ı çalıştır
-# Tüm parametreleri buraya ekleyebilirsiniz
-bash scripts/run_pipeline.sh \
+# Disable tokenizers parallelism warning (safe for SLURM/forked processes)
+export TOKENIZERS_PARALLELISM=false
+
+# Run pipeline with all parameters
+bash "$PROJECT_ROOT/scripts/run_pipeline.sh" \
     --model "${MODEL_NAME:-TinyLlama/TinyLlama-1.1B-Chat-v1.0}" \
+    --input-dir "${INPUT_DIR:-$PROJECT_ROOT/data_input}" \
+    --output-dir "${OUTPUT_DIR:-data_output}" \
+    --output-model-dir "${OUTPUT_MODEL_DIR:-fine_tuned_weights}" \
     --epochs "${NUM_EPOCHS:-10}" \
-    --batch-size "${BATCH_SIZE:-2}" \
-    --questions "${NUM_QUESTIONS:-3}"
+    --batch-size "${BATCH_SIZE:-1}" \
+    --questions "${NUM_QUESTIONS:-3}" \
+    --augment-paraphrases "${AUGMENT_PARAPHRASES:-0}"
 
 echo "Pipeline job completed at $(date)"
 
