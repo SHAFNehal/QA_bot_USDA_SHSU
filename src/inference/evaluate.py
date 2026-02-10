@@ -1,20 +1,23 @@
 """
 Model Evaluation Script
 
-This script evaluates a fine-tuned model on various test cases including:
-- Greeting responses (keyword-based)
-- Rephrased questions, multi-turn, holdout set
+This script evaluates a fine-tuned model on various test cases from your data:
+- Holdout set evaluation with full metrics (BLEU, ROUGE, etc.)
+- Single-turn question tests (consistency across questions)
+- Multi-turn conversation tests (context handling)
+
+All tests are dynamically generated from the test data file.
 
 Metrics:
 - Keyword match (pass/fail, score) for all tests.
-- Standard metrics on tests with reference (e.g. holdout): BLEU, ROUGE-1/2/L,
+- Standard metrics on holdout tests: BLEU, ROUGE-1/2/L,
   embedding similarity (cosine), exact match, token F1. Optional: LLM-as-judge.
 
 Usage:
-    python evaluate.py --model_path fine_tuned_weights
     python evaluate.py --model_path fine_tuned_weights --test_data training_test.jsonl
-    python evaluate.py --model_path fine_tuned_weights --no_embedding  # skip embedding metric
-    python evaluate.py --model_path fine_tuned_weights --llm_judge    # enable LLM-as-judge
+    python evaluate.py --model_path fine_tuned_weights --test_data training_test.jsonl --test_data_only
+    python evaluate.py --model_path fine_tuned_weights --test_data training_test.jsonl --no_embedding
+    python evaluate.py --model_path fine_tuned_weights --test_data training_test.jsonl --llm_judge
 """
 
 import argparse
@@ -85,72 +88,6 @@ class EvaluationReport:
                 for r in self.results
             ]
         }
-
-
-# Test cases for evaluation
-GREETING_TESTS = [
-    {"input": "Hi", "expected_keywords": ["hello", "hi", "help", "assist"]},
-    {"input": "Hello", "expected_keywords": ["hello", "hi", "help", "welcome"]},
-    {"input": "Hey there", "expected_keywords": ["hello", "hi", "hey", "help"]},
-    {"input": "Good morning", "expected_keywords": ["good", "morning", "help", "hello"]},
-    {"input": "Good afternoon", "expected_keywords": ["good", "afternoon", "help", "hello"]},
-]
-
-GRATITUDE_TESTS = [
-    {"input": "Thanks", "expected_keywords": ["welcome", "glad", "help", "happy"]},
-    {"input": "Thank you so much", "expected_keywords": ["welcome", "glad", "pleasure", "happy"]},
-    {"input": "I appreciate it", "expected_keywords": ["welcome", "glad", "help", "appreciate"]},
-]
-
-FAREWELL_TESTS = [
-    {"input": "Bye", "expected_keywords": ["bye", "goodbye", "care", "well"]},
-    {"input": "Goodbye", "expected_keywords": ["bye", "goodbye", "care", "well"]},
-    {"input": "See you later", "expected_keywords": ["bye", "see", "later", "care"]},
-]
-
-# Rephrased question tests - same concept, different phrasing
-REPHRASED_QUESTION_TESTS = [
-    {
-        "concept": "machine_learning",
-        "variations": [
-            "What is machine learning?",
-            "Can you explain machine learning?",
-            "Tell me about machine learning",
-            "How would you define machine learning?",
-            "Describe machine learning",
-        ],
-        "expected_keywords": ["learn", "data", "algorithm", "pattern", "train", "model", "ai", "artificial"]
-    },
-    {
-        "concept": "photosynthesis",
-        "variations": [
-            "What is photosynthesis?",
-            "How does photosynthesis work?",
-            "Explain photosynthesis",
-            "Can you describe photosynthesis?",
-            "Tell me about photosynthesis",
-        ],
-        "expected_keywords": ["plant", "light", "sun", "oxygen", "carbon", "glucose", "energy", "chlorophyll"]
-    },
-]
-
-# Multi-turn conversation tests
-MULTITURN_TESTS = [
-    {
-        "name": "coreference_it",
-        "turns": [
-            {"user": "What is Python?", "check_keywords": ["programming", "language"]},
-            {"user": "Why is it popular?", "check_keywords": ["popular", "easy", "simple", "library", "libraries"]},
-        ]
-    },
-    {
-        "name": "coreference_this",
-        "turns": [
-            {"user": "What is artificial intelligence?", "check_keywords": ["ai", "artificial", "intelligence", "machine"]},
-            {"user": "What are some applications of this?", "check_keywords": ["application", "use", "example"]},
-        ]
-    },
-]
 
 
 def check_response_quality(response: str, expected_keywords: List[str]) -> tuple:
@@ -239,112 +176,133 @@ class ModelEvaluator:
         if self.inference:
             self.inference.clear_history()
 
-    def run_greeting_tests(self) -> List[EvaluationResult]:
-        """Run greeting tests."""
+    def run_rephrased_question_tests(self, test_data_path: str) -> List[EvaluationResult]:
+        """
+        Run rephrased question tests using actual data.
+        Tests single-turn questions from the dataset.
+        """
         results = []
-        for test in GREETING_TESTS:
-            response = self.generate_response(test["input"])
-            passed, score, matched = check_response_quality(response, test["expected_keywords"])
+        items = load_jsonl(test_data_path)
+        if not items:
+            print(f"Warning: No examples in test file {test_data_path}")
+            return results
 
-            result = EvaluationResult(
-                category="greetings",
-                test_name=f"greeting_{test['input'].lower().replace(' ', '_')}",
-                input_text=test["input"],
-                expected_keywords=test["expected_keywords"],
-                actual_response=response,
-                passed=passed,
-                score=score,
-                notes=f"Matched: {matched}"
-            )
-            results.append(result)
-        return results
+        # Filter single-turn questions only (not multi-turn conversations)
+        single_turn_items = []
+        for item in items:
+            if "question" in item and "answer" in item:
+                # Simple Q&A format - single turn
+                single_turn_items.append(item)
+            elif "input" in item and "output" in item:
+                # Check if it's a single-turn conversation
+                raw_input = item["input"]
+                user_turns = re.findall(r"<\|user\|>\s*\n(.*?)</s>", raw_input, re.DOTALL)
+                if len(user_turns) == 1:
+                    # Single turn conversation
+                    single_turn_items.append(item)
 
-    def run_gratitude_tests(self) -> List[EvaluationResult]:
-        """Run gratitude tests."""
-        results = []
-        for test in GRATITUDE_TESTS:
-            response = self.generate_response(test["input"])
-            passed, score, matched = check_response_quality(response, test["expected_keywords"])
+        # Limit to 10 tests for rephrased questions
+        test_items = single_turn_items[:10] if len(single_turn_items) > 10 else single_turn_items
 
-            result = EvaluationResult(
-                category="gratitude",
-                test_name=f"gratitude_{test['input'].lower().replace(' ', '_')[:20]}",
-                input_text=test["input"],
-                expected_keywords=test["expected_keywords"],
-                actual_response=response,
-                passed=passed,
-                score=score,
-                notes=f"Matched: {matched}"
-            )
-            results.append(result)
-        return results
-
-    def run_farewell_tests(self) -> List[EvaluationResult]:
-        """Run farewell tests."""
-        results = []
-        for test in FAREWELL_TESTS:
-            response = self.generate_response(test["input"])
-            passed, score, matched = check_response_quality(response, test["expected_keywords"])
-
-            result = EvaluationResult(
-                category="farewells",
-                test_name=f"farewell_{test['input'].lower().replace(' ', '_')}",
-                input_text=test["input"],
-                expected_keywords=test["expected_keywords"],
-                actual_response=response,
-                passed=passed,
-                score=score,
-                notes=f"Matched: {matched}"
-            )
-            results.append(result)
-        return results
-
-    def run_rephrased_question_tests(self) -> List[EvaluationResult]:
-        """Run rephrased question tests."""
-        results = []
-        for concept_test in REPHRASED_QUESTION_TESTS:
-            concept = concept_test["concept"]
-            expected_keywords = concept_test["expected_keywords"]
-
-            for i, variation in enumerate(concept_test["variations"]):
-                response = self.generate_response(variation)
-                passed, score, matched = check_response_quality(response, expected_keywords)
-
-                result = EvaluationResult(
-                    category="rephrased_questions",
-                    test_name=f"{concept}_variation_{i+1}",
-                    input_text=variation,
-                    expected_keywords=expected_keywords,
-                    actual_response=response,
-                    passed=passed,
-                    score=score,
-                    notes=f"Matched: {matched}"
-                )
-                results.append(result)
-        return results
-
-    def run_multiturn_tests(self) -> List[EvaluationResult]:
-        """Run multi-turn conversation tests."""
-        results = []
-        for test in MULTITURN_TESTS:
+        for i, item in enumerate(test_items):
             self.clear_history()
-            test_name = test["name"]
+            
+            if "question" in item and "answer" in item:
+                question = item["question"].strip()
+                expected_answer = item["answer"].strip()
+            elif "input" in item and "output" in item:
+                raw_input = item["input"]
+                expected_answer = item["output"].strip()
+                user_turns = re.findall(r"<\|user\|>\s*\n(.*?)</s>", raw_input, re.DOTALL)
+                question = user_turns[0].strip() if user_turns else ""
+            else:
+                continue
 
-            for i, turn in enumerate(test["turns"]):
-                response = self.generate_response(turn["user"], use_history=True)
-                passed, score, matched = check_response_quality(response, turn["check_keywords"])
+            if not question:
+                continue
 
-                result = EvaluationResult(
-                    category="multiturn",
-                    test_name=f"{test_name}_turn_{i+1}",
-                    input_text=turn["user"],
-                    expected_keywords=turn["check_keywords"],
-                    actual_response=response,
-                    passed=passed,
-                    score=score,
-                    notes=f"Turn {i+1}, Matched: {matched}"
-                )
-                results.append(result)
+            # Generate response
+            response = self.generate_response(question, use_history=False)
+            
+            # Extract keywords from expected answer
+            expected_keywords = _keywords_from_answer(expected_answer)
+            passed, score, matched = check_response_quality(response, expected_keywords)
+
+            result = EvaluationResult(
+                category="rephrased_questions",
+                test_name=f"single_turn_q{i+1}",
+                input_text=question,
+                expected_keywords=expected_keywords,
+                actual_response=response,
+                passed=passed,
+                score=score,
+                notes=f"Matched: {matched}",
+                reference_answer=expected_answer
+            )
+            results.append(result)
+        
+        return results
+
+    def run_multiturn_tests(self, test_data_path: str) -> List[EvaluationResult]:
+        """
+        Run multi-turn conversation tests using actual data.
+        Tests multi-turn conversations from the dataset.
+        """
+        results = []
+        items = load_jsonl(test_data_path)
+        if not items:
+            print(f"Warning: No examples in test file {test_data_path}")
+            return results
+
+        # Filter multi-turn conversations only
+        multiturn_items = []
+        for item in items:
+            if "input" in item and "output" in item:
+                raw_input = item["input"]
+                user_turns = re.findall(r"<\|user\|>\s*\n(.*?)</s>", raw_input, re.DOTALL)
+                if len(user_turns) > 1:
+                    # Multi-turn conversation
+                    multiturn_items.append(item)
+
+        # Limit to 4 tests for multi-turn
+        test_items = multiturn_items[:4] if len(multiturn_items) > 4 else multiturn_items
+
+        for i, item in enumerate(test_items):
+            self.clear_history()
+            
+            raw_input = item["input"]
+            expected_answer = item["output"].strip()
+            user_turns = re.findall(r"<\|user\|>\s*\n(.*?)</s>", raw_input, re.DOTALL)
+            user_turns = [t.strip() for t in user_turns if t.strip()]
+            
+            if len(user_turns) < 2:
+                continue
+
+            # Replay conversation history
+            for turn_idx, turn in enumerate(user_turns[:-1]):
+                self.generate_response(turn, use_history=True)
+            
+            # Generate response for the final turn
+            final_question = user_turns[-1]
+            response = self.generate_response(final_question, use_history=True)
+            
+            # Extract keywords from expected answer
+            expected_keywords = _keywords_from_answer(expected_answer)
+            passed, score, matched = check_response_quality(response, expected_keywords)
+
+            result = EvaluationResult(
+                category="multiturn",
+                test_name=f"multiturn_conv{i+1}",
+                input_text=f"[Turn {len(user_turns)}] {final_question}",
+                expected_keywords=expected_keywords,
+                actual_response=response,
+                passed=passed,
+                score=score,
+                notes=f"Turns: {len(user_turns)}, Matched: {matched}",
+                reference_answer=expected_answer
+            )
+            results.append(result)
+        
         return results
 
     def run_holdout_tests(self, test_data_path: str) -> List[EvaluationResult]:
@@ -421,41 +379,28 @@ class ModelEvaluator:
 
         all_results = []
 
+        if not test_data_path or not os.path.isfile(test_data_path):
+            print(f"\nError: test_data path is required. Got: {test_data_path}")
+            print("All evaluation tests now require data from the test file.")
+            self.report.results = []
+            self.report.total_tests = 0
+            self.report.passed_tests = 0
+            self.report.failed_tests = 0
+            return self.report
+
         if test_data_only:
-            if not test_data_path or not os.path.isfile(test_data_path):
-                print(f"\nError: --test_data_only requires a valid --test_data path. Got: {test_data_path}")
-                self.report.results = []
-                self.report.total_tests = 0
-                self.report.passed_tests = 0
-                self.report.failed_tests = 0
-                return self.report
-            print("\n[1/1] Running evaluation on provided test data only (no preset tests)...")
+            print("\n[1/1] Running evaluation on provided test data only (holdout metrics)...")
             all_results.extend(self.run_holdout_tests(test_data_path))
         else:
-            step = 1
-            total_steps = 6 if (test_data_path and os.path.isfile(test_data_path)) else 5
-
-            if test_data_path and os.path.isfile(test_data_path):
-                print(f"\n[1/{total_steps}] Running holdout (test set) evaluation...")
-                all_results.extend(self.run_holdout_tests(test_data_path))
-                step = 2
-            elif test_data_path:
-                print(f"\nWarning: Holdout file not found: {test_data_path}, skipping holdout evaluation")
-
-            print(f"\n[{step}/{total_steps}] Running greeting tests...")
-            all_results.extend(self.run_greeting_tests())
-            step += 1
-            print(f"[{step}/{total_steps}] Running gratitude tests...")
-            all_results.extend(self.run_gratitude_tests())
-            step += 1
-            print(f"[{step}/{total_steps}] Running farewell tests...")
-            all_results.extend(self.run_farewell_tests())
-            step += 1
-            print(f"[{step}/{total_steps}] Running rephrased question tests...")
-            all_results.extend(self.run_rephrased_question_tests())
-            step += 1
-            print(f"[{step}/{total_steps}] Running multi-turn tests...")
-            all_results.extend(self.run_multiturn_tests())
+            # Run all three test categories from data
+            print(f"\n[1/3] Running holdout (test set) evaluation with full metrics...")
+            all_results.extend(self.run_holdout_tests(test_data_path))
+            
+            print(f"\n[2/3] Running single-turn question tests from data...")
+            all_results.extend(self.run_rephrased_question_tests(test_data_path))
+            
+            print(f"[3/3] Running multi-turn conversation tests from data...")
+            all_results.extend(self.run_multiturn_tests(test_data_path))
 
         # Compile report
         self.report.results = all_results
@@ -516,12 +461,9 @@ class ModelEvaluator:
         print("\nSUCCESS CRITERIA CHECK:")
         criteria = []
         thresholds = {
-            "greetings": (80, "Greetings work"),
-            "gratitude": (80, "Gratitude responses"),
-            "farewells": (80, "Farewells work"),
-            "rephrased_questions": (60, "Rephrased questions work"),
-            "multiturn": (60, "Multi-turn works"),
-            "holdout": (50, "Holdout (test set) score"),
+            "rephrased_questions": (60, "Single-turn questions"),
+            "multiturn": (60, "Multi-turn conversations"),
+            "holdout": (50, "Holdout with full metrics"),
         }
         for cat, score in report.category_scores.items():
             thresh, label = thresholds.get(cat, (50, f"{cat} score"))
@@ -573,14 +515,14 @@ def main():
     parser.add_argument(
         "--test_data",
         type=str,
-        default=None,
-        help="Path to holdout test set (JSONL) for evaluation. If provided, evaluation runs on this set first (recommended)."
+        required=True,
+        help="Path to test dataset (JSONL) - REQUIRED. All evaluation tests are generated from this data."
     )
 
     parser.add_argument(
         "--test_data_only",
         action="store_true",
-        help="Evaluate only on --test_data (no preset greeting/gratitude/multiturn tests). Requires --test_data."
+        help="Evaluate only holdout tests with full metrics (skip single-turn and multi-turn category tests)."
     )
 
     parser.add_argument(
