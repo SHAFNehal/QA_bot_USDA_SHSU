@@ -272,11 +272,22 @@ For more control, run each stage individually:
 Extract QA pairs from your documents using an LLM:
 
 ```bash
+# Set PYTHONPATH and test the import
+cd /home/shsu/Desktop/LLM_Insect_USDA/QA_bot_USDA_SHSU
+export PYTHONPATH="$(pwd):$PYTHONPATH"
+
 python src/dataset/dataset_creator.py \
     --input_dir data_input \
     --output_file data_output/qa_dataset.jsonl \
     --model_name TinyLlama/TinyLlama-1.1B-Chat-v1.0 \
     --num_questions 3
+
+python src/dataset/dataset_creator.py \
+    --input_dir data_input \
+    --output_file data_output/qa_dataset.jsonl \
+    --model_name meta-llama/Llama-3.1-8B-Instruct \
+    --num_questions 3
+    --use_llm_paraphrases
 ```
 
 **Options:**
@@ -346,6 +357,7 @@ python src/dataset/generators/multiturn_generator.py \
     --input data_output/qa_cleaned.jsonl \
     --output data_output/multiturn.jsonl \
     --include_coreference
+    --num_followups 4
 ```
 
 **Options:**
@@ -388,6 +400,15 @@ python src/training/fine_tuner.py \
     --dataset_path data_output/training_dataset.jsonl \
     --output_dir fine_tuned_weights \
     --model_name TinyLlama/TinyLlama-1.1B-Chat-v1.0 \
+    --num_train_epochs 10 \
+    --per_device_train_batch_size 2 \
+    --gradient_accumulation_steps 4 \
+    --early_stopping_patience 3
+
+python src/training/fine_tuner.py \
+    --dataset_path data_output/training_dataset.jsonl \
+    --output_dir fine_tuned_weights \
+    --model_name meta-llama/Llama-3.1-8B-Instruct \
     --num_train_epochs 10 \
     --per_device_train_batch_size 2 \
     --gradient_accumulation_steps 4 \
