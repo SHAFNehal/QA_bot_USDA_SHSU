@@ -70,7 +70,7 @@ class QAInference:
 
         return formatted
     
-    def generate_answer(self, question: str, max_new_tokens: int = 256,
+    def generate_answer(self, question: str, max_new_tokens: int = 2048,
                         temperature: float = 0.7, top_p: float = 0.9,
                         use_history: bool = True) -> str:
         """Generate answer for a given question, optionally using conversation history."""
