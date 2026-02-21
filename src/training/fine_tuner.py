@@ -29,6 +29,10 @@ from transformers import (
 )
 from src.utils.model_utils import load_model_and_tokenizer, SYSTEM_PROMPT, format_for_training
 
+# Allow running this file directly: `python src/training/fine_tuner.py`
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 @dataclass
 class DataCollatorForCompletionOnly:
