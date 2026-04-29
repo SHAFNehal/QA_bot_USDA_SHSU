@@ -135,11 +135,13 @@ class ModelEvaluator:
         base_model: str = "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
         use_embedding: bool = True,
         use_llm_judge: bool = False,
+        max_new_tokens: int = 2048,
     ):
         self.model_path = model_path
         self.base_model = base_model
         self.use_embedding = use_embedding
         self.use_llm_judge = use_llm_judge
+        self.max_new_tokens = max_new_tokens
         self.inference = None
         self.report = EvaluationReport(
             model_path=model_path,
@@ -167,7 +169,9 @@ class ModelEvaluator:
         if self.inference is None:
             return "[DRY RUN - No model loaded]"
         try:
-            return self.inference.generate_answer(question, use_history=use_history)
+            return self.inference.generate_answer(
+                question, use_history=use_history, max_new_tokens=self.max_new_tokens
+            )
         except Exception as e:
             return f"[ERROR: {e}]"
 
@@ -313,7 +317,10 @@ class ModelEvaluator:
             print(f"Warning: No examples in holdout file {test_data_path}")
             return results
 
+        total = len(items)
         for i, item in enumerate(items):
+            if (i + 1) % 100 == 0 or i == 0:
+                print(f"  Holdout progress: {i+1}/{total}", flush=True)
             self.clear_history()
             input_text = ""
             if "question" in item and "answer" in item:
@@ -537,6 +544,13 @@ def main():
         help="Enable LLM-as-judge: use the same model to rate each response 0-1 (slower)."
     )
 
+    parser.add_argument(
+        "--max_new_tokens",
+        type=int,
+        default=2048,
+        help="Max tokens for generation (default: 2048)"
+    )
+
     args = parser.parse_args()
 
     # Create evaluator
@@ -545,6 +559,7 @@ def main():
         args.base_model,
         use_embedding=not args.no_embedding,
         use_llm_judge=args.llm_judge,
+        max_new_tokens=args.max_new_tokens,
     )
 
     # Load model unless dry run

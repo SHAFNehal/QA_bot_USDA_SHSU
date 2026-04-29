@@ -27,7 +27,7 @@ class RAGGenerator:
         model_name: str,
         device: Optional[str] = None,
         system_prompt: Optional[str] = None,
-        max_new_tokens: int = 2048,
+        max_new_tokens: int = 256,
         temperature: float = 0.7,
     ):
         self.model_name = model_name

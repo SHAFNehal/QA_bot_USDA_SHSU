@@ -15,7 +15,8 @@ tqdm>=4.65.0
 argparse
 json5>=0.9.14 
 #flash-attn>=2.3.0
-# bitsandbytes>=0.41.0
+# Recommended for large-model quantized loading on GPU (4-bit / 8-bit)
+bitsandbytes>=0.43.0
 wandb>=0.16.0
 scipy>=1.10.0
 # Evaluation metrics
@@ -24,6 +25,8 @@ nltk>=3.8.0
 sentence-transformers>=2.2.0
 # onnxruntime 1.20+ has no wheel for Python 3.9; pin for cp39 compatibility
 onnxruntime>=1.16.0,<1.20
+# Use pysqlite3 on systems with old sqlite3 (< 3.35) for ChromaDB
+pysqlite3-binary>=0.5.0
 chromadb>=0.4.0
 rank_bm25>=0.2.2
 streamlit>=1.28.0

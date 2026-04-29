@@ -13,10 +13,16 @@ DEFAULT_MODELS = {
         "description": "3.8B parameters, instruction-tuned"
     },
     "llama3_1": {
-        "name": "meta-llama/Meta-Llama-3-8B-Instruct",
+        "name": "meta-llama/Meta-Llama-3.1-8B-Instruct",
         "max_length": 1024,
         "temperature": 0.7,
         "description": "8B parameters, latest Llama 3.1 model"
+    },
+    "mistral7b": {
+        "name": "mistralai/Mistral-7B-Instruct-v0.2",
+        "max_length": 1024,
+        "temperature": 0.7,
+        "description": "7B parameters, Mistral Instruct v0.2"
     },
     "tinyllama": {
         "name": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
@@ -28,9 +34,11 @@ DEFAULT_MODELS = {
 
 # Default training configurations
 DEFAULT_TRAINING_CONFIG = {
-    "num_epochs": 10,
+    # For LoRA SFT on a relatively small, domain-specific dataset, fewer epochs with a lower LR
+    # is typically more stable and reduces catastrophic forgetting.
+    "num_epochs": 3,
     "batch_size": 2,
-    "learning_rate": 5e-5,
+    "learning_rate": 1e-4,
     "warmup_steps": 100,
     "max_seq_length": 2048,  # Increased for multi-turn support
     "gradient_accumulation_steps": 4,  # Effective batch size = batch_size * 4
@@ -95,13 +103,23 @@ CONVERSATIONAL_CONFIG = {
     "include_gratitude": True,
     "include_acknowledgments": True,
     "include_meta_questions": True,
-    "conversational_multiplier": 3,  # Repeat conversational data N times
+    # Repeat conversational data N times (in merge step) to increase representation.
+    "conversational_multiplier": 3,
 }
 
 # Multi-turn conversation settings
 MULTITURN_CONFIG = {
     "max_history_turns": 5,
     "include_coreference_examples": True,
+    # Fraction of QA pairs to convert into *true* multi-turn chains (0..1).
+    # This controls how much multiturn data we generate from your cleaned QA set.
+    "multiturn_ratio": 0.2,
+    # Number of follow-up turns to add for each synthetic multi-turn conversation.
+    "num_followups": 2,
+    # Repeat multi-turn dataset N times (in merge step) to increase representation.
+    "multiturn_multiplier": 1,
+    # Deterministic sampling seed for multi-turn generation.
+    "seed": 42,
 }
 
 # Paraphrase augmentation settings
@@ -120,42 +138,30 @@ DEVICE_CONFIG = {
     "cuda": "Force CUDA usage"
 }
 
-# RAG (Retrieval-Augmented Generation) configuration
+# RAG (Retrieval-Augmented Generation) configurations
 RAG_CONFIG = {
-    "top_k": 5,
-    "chunk_size": FILE_PROCESSING_CONFIG.get("max_chunk_size", 2000) // 2,  # 1000 default
-    "overlap": FILE_PROCESSING_CONFIG.get("min_chunk_size", 100),
-    "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
-    "use_hybrid": False,
-    "collection_name": "rag_docs",
+    "top_k": 5,  # Number of chunks to retrieve per query
+    "chunk_size": 1000,  # Chunk size for document splitting
+    "overlap": 200,  # Overlap between chunks
+    "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",  # Embedding model for vector search
+    "use_hybrid": False,  # Use hybrid retrieval (dense + BM25)
+    "collection_name": "rag_docs",  # ChromaDB collection name
 }
 
-def get_rag_config(**overrides):
-    """Get RAG configuration with optional overrides."""
-    config = RAG_CONFIG.copy()
-    config.update(overrides)
-    return config
-
-# Hybrid RAG (restate -> RAG + FT -> synthesize) configuration
+# Hybrid RAG configurations
 HYBRID_RAG_CONFIG = {
-    "small_llm_model": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-    "num_restatements": 5,
-    "per_query_top_k": 5,
-    "merged_retrieval_top_k": 12,
-    "max_new_tokens_restater": 256,
-    "max_new_tokens_synthesizer": 512,
-    "temperature": 0.7,
+    "small_llm_model": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",  # Small LLM for restating and synthesizing
+    "num_restatements": 5,  # Number of question restatements
+    "per_query_top_k": 5,  # Chunks retrieved per query before merge
+    "merged_retrieval_top_k": 12,  # Total chunks after RRF merge
+    "max_new_tokens_restater": 256,  # Max tokens for restatement generation
+    "max_new_tokens_synthesizer": 512,  # Max tokens for final answer synthesis
+    "temperature": 0.7,  # Sampling temperature for small LLM
 }
 
-def get_hybrid_rag_config(**overrides):
-    """Get Hybrid RAG configuration with optional overrides."""
-    config = HYBRID_RAG_CONFIG.copy()
-    config.update(overrides)
-    return config
-
-def get_model_config(model_key: str = "tinyllama"):
+def get_model_config(model_key: str = "mistral7b"):
     """Get configuration for a specific model."""
-    return DEFAULT_MODELS.get(model_key, DEFAULT_MODELS["tinyllama"])
+    return DEFAULT_MODELS.get(model_key, DEFAULT_MODELS["mistral7b"])
 
 def get_training_config(**overrides):
     """Get training configuration with optional overrides."""
@@ -183,6 +189,18 @@ def list_available_models():
             "description": config["description"]
         })
     return models
+
+def get_rag_config(**overrides):
+    """Get RAG configuration with optional overrides."""
+    config = RAG_CONFIG.copy()
+    config.update(overrides)
+    return config
+
+def get_hybrid_rag_config(**overrides):
+    """Get Hybrid RAG configuration with optional overrides."""
+    config = HYBRID_RAG_CONFIG.copy()
+    config.update(overrides)
+    return config
 
 def validate_config(config: dict, config_type: str = "training"):
     """Validate configuration settings."""

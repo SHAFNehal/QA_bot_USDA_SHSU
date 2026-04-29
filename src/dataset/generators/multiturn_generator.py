@@ -231,6 +231,58 @@ def augment_dataset_with_coreference(
     return all_examples
 
 
+def generate_multiturn_dataset_from_qa(
+    qa_pairs: List[Dict[str, str]],
+    multiturn_ratio: float = 0.2,
+    num_followups: int = 2,
+    include_coreference: bool = True,
+    seed: int = 42,
+) -> List[Dict[str, str]]:
+    """
+    Generate *true* multi-turn training examples from a subset of QA pairs.
+
+    IMPORTANT: We intentionally do NOT wrap every QA into a "single_turn" input/output example here,
+    because that duplicates the QA dataset and can drown out true multi-turn behavior.
+
+    Args:
+        qa_pairs: Source QA pairs (question/answer dicts)
+        multiturn_ratio: Fraction of QA pairs to convert into multi-turn conversations (0..1)
+        num_followups: Number of follow-up turns to add after the initial QA turn
+        include_coreference: Whether to include predefined coreference conversations
+        seed: RNG seed for deterministic sampling
+
+    Returns:
+        List of training examples in (input/output) format with type='multiturn'
+    """
+    if not qa_pairs:
+        return []
+
+    if multiturn_ratio <= 0:
+        sampled = []
+    else:
+        # Clamp to [0, 1]
+        r = max(0.0, min(1.0, float(multiturn_ratio)))
+        rng = random.Random(seed)
+        k = int(round(len(qa_pairs) * r))
+        k = max(0, min(len(qa_pairs), k))
+        sampled = rng.sample(qa_pairs, k) if k > 0 else []
+
+    multiturn_examples: List[Dict[str, str]] = []
+
+    # Create synthetic multi-turn conversations from sampled QA pairs
+    for qa in sampled:
+        if "question" not in qa or "answer" not in qa:
+            continue
+        conversation = create_multiturn_from_qa(qa, num_followups=num_followups)
+        multiturn_examples.extend(format_conversation_for_training(conversation))
+
+    # Add predefined coreference conversations
+    if include_coreference:
+        multiturn_examples.extend(generate_coreference_training_data())
+
+    return multiturn_examples
+
+
 def save_multiturn_dataset(data: List[Dict], output_path: str) -> None:
     """Save multi-turn dataset to JSONL file."""
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
@@ -279,6 +331,34 @@ def main():
     )
 
     parser.add_argument(
+        "--multiturn_ratio",
+        type=float,
+        default=0.2,
+        help="Fraction of QA pairs to convert into true multi-turn chains (0..1)"
+    )
+
+    parser.add_argument(
+        "--num_followups",
+        type=int,
+        default=2,
+        help="Number of follow-up turns per synthetic multi-turn conversation"
+    )
+
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for deterministic sampling"
+    )
+
+    parser.add_argument(
+        "--wrap_single_turn",
+        action="store_true",
+        help="(Legacy) Also wrap each QA pair as a single_turn input/output example. "
+             "Not recommended: duplicates QA data and reduces true multi-turn ratio."
+    )
+
+    parser.add_argument(
         "--coreference_only",
         action="store_true",
         help="Only generate coreference examples (no input QA needed)"
@@ -293,8 +373,18 @@ def main():
         if Path(args.input).exists():
             qa_pairs = load_qa_pairs(args.input)
             print(f"Loaded {len(qa_pairs)} QA pairs from {args.input}")
-            augmented = augment_dataset_with_coreference(qa_pairs, args.include_coreference)
-            all_examples.extend(augmented)
+            if args.wrap_single_turn:
+                augmented = augment_dataset_with_coreference(qa_pairs, args.include_coreference)
+                all_examples.extend(augmented)
+            else:
+                generated = generate_multiturn_dataset_from_qa(
+                    qa_pairs,
+                    multiturn_ratio=args.multiturn_ratio,
+                    num_followups=args.num_followups,
+                    include_coreference=args.include_coreference,
+                    seed=args.seed,
+                )
+                all_examples.extend(generated)
         else:
             print(f"Warning: Input file {args.input} not found")
 

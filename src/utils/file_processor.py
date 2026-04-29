@@ -1,33 +1,25 @@
+import json
 import os
 import re
 import glob
-import json
-from pathlib import Path
 from typing import List, Dict, Any
 from docx import Document
 import docx2txt
 
 
 def load_jsonl(file_path: str) -> List[Dict[str, Any]]:
-    """Load JSONL file; one JSON object per line. Skips blank lines and invalid lines."""
-    data = []
-    with open(file_path, 'r', encoding='utf-8') as f:
+    """Load a JSONL file; each line is a JSON object. Returns list of dicts."""
+    out = []
+    with open(file_path, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
-            if line:
-                try:
-                    data.append(json.loads(line))
-                except json.JSONDecodeError:
-                    continue
-    return data
-
-
-def save_jsonl(data: List[Dict[str, Any]], file_path: str) -> None:
-    """Save list of dicts to JSONL file; one JSON object per line."""
-    Path(file_path).parent.mkdir(parents=True, exist_ok=True)
-    with open(file_path, 'w', encoding='utf-8') as f:
-        for item in data:
-            f.write(json.dumps(item, ensure_ascii=False) + '\n')
+            if not line:
+                continue
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    return out
 
 
 def read_text_file(file_path: str) -> str:

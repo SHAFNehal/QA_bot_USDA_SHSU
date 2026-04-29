@@ -207,7 +207,7 @@ def main():
     parser = argparse.ArgumentParser(description="SFT with TinyLlama Chat Format")
     parser.add_argument("--dataset_path", type=str, default="data_output/qa_dataset_cleaned.jsonl")
     parser.add_argument("--output_dir", type=str, default="fine_tuned_sft_weights")
-    parser.add_argument("--model_name", type=str, default="TinyLlama/TinyLlama-1.1B-Chat-v1.0")
+    parser.add_argument("--model_name", type=str, default="mistralai/Mistral-7B-Instruct-v0.2")
     parser.add_argument("--num_train_epochs", type=int, default=10)
     parser.add_argument("--per_device_train_batch_size", type=int, default=4)
     parser.add_argument("--gradient_accumulation_steps", type=int, default=4)

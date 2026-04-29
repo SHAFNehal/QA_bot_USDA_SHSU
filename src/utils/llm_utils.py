@@ -323,12 +323,21 @@ def create_pipeline(model_name: str, device: str = "auto"):
     """Create a text generation pipeline."""
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    # Avoid dtype mismatch errors (Half vs BFloat16) on newer GPUs/models.
+    # Prefer bf16 when CUDA supports it; otherwise fall back to fp16.
+    if device == "cuda":
+        model_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+    else:
+        model_dtype = torch.float32
     
     return pipeline(
         "text-generation",
         model=model_name,
-        dtype=torch.float16 if device == "cuda" else torch.float32,  # Changed from torch_dtype to dtype (deprecated)
-        device_map=device if device == "cuda" else None,
+        dtype=model_dtype,
+        # device_map expects values like "auto" or a device map dict.
+        # Passing "cuda" can break on some transformers versions.
+        device_map="auto" if device == "cuda" else None,
         trust_remote_code=True
     )
 
@@ -371,6 +380,7 @@ def generate_qa_with_pipeline(pipe, text_chunk: str, num_questions: int = 3,
 def get_available_models() -> List[str]:
     """Return a list of recommended small models for QA generation."""
     return [
+        "mistralai/Mistral-7B-Instruct-v0.2",
         "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
         "microsoft/phi-3-mini-4k-instruct",
         "meta-llama/Meta-Llama-3-8B-Instruct"

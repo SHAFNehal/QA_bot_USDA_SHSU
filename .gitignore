@@ -1,0 +1,58 @@
+.env
+.env.*
+!.env.example
+env.hf
+*.key
+*.pem
+*.token
+
+# Python cache/build
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Runtime outputs
+logs/
+scripts/logs/
+*.out
+*.err
+*.log
+
+# Local model artifacts
+pretrained_models/
+fine_tuned_weights*/
+run*_weights/
+run2_*/
+run3_*/
+run4_*/
+checkpoints/
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.ckpt
+
+# Local datasets and reports (keep docs, not bulky artifacts)
+data_output/
+!data_output/.gitkeep
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

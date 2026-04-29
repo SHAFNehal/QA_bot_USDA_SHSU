@@ -388,7 +388,7 @@ Examples:
     parser.add_argument(
         "--model_name",
         type=str,
-        default="TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+        default="mistralai/Mistral-7B-Instruct-v0.2",
         help="Hugging Face model name for QA generation"
     )
 

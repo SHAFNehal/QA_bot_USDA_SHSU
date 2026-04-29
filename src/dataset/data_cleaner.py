@@ -7,11 +7,30 @@ strict QA validation and relaxed conversational data validation.
 
 import json
 import argparse
+from typing import List, Dict, Any, Tuple
 import re
 from collections import defaultdict
-from typing import List, Dict, Any, Tuple
+from pathlib import Path
 
-from src.utils.file_processor import load_jsonl, save_jsonl
+
+def load_jsonl(file_path: str) -> List[Dict[str, Any]]:
+    """Load JSONL file."""
+    data = []
+    with open(file_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            try:
+                data.append(json.loads(line.strip()))
+            except json.JSONDecodeError:
+                continue
+    return data
+
+
+def save_jsonl(data: List[Dict[str, Any]], file_path: str) -> None:
+    """Save data to JSONL file."""
+    Path(file_path).parent.mkdir(parents=True, exist_ok=True)
+    with open(file_path, 'w', encoding='utf-8') as f:
+        for item in data:
+            f.write(json.dumps(item, ensure_ascii=False) + '\n')
 
 
 def is_conversational_input(text: str) -> bool:
@@ -64,6 +83,47 @@ def is_valid_conversational(text: str) -> bool:
         return False
 
     return True
+
+
+def is_context_dependent_question(question: str) -> bool:
+    """
+    Check if the question is a follow-up that requires prior context (e.g. from multi-turn).
+    Such questions (e.g. "How does it work?", "Can you explain that more?") should not
+    be evaluated as standalone single-turn questions.
+    """
+    q = question.strip().lower()
+    if len(q) < 15:
+        return False  # Too short to be a meaningful follow-up
+    # Patterns that strongly suggest context-dependence (pronouns, demonstratives, vague referents)
+    context_dependent_patterns = [
+        r"^how does it\b",
+        r"^why is it\b",
+        r"^what is it\b",
+        r"^when was it\b",
+        r"^where does it\b",
+        r"^who invented it\b",
+        r"^what are its\b",
+        r"^how is it\b",
+        r"^how efficient is it\b",
+        r"^where is it\b",
+        r"^can you explain that\b",
+        r"^what do you mean by that\b",
+        r"^could you elaborate on that\b",
+        r"^tell me more about that\b",
+        r"^what else should i know\b",
+        r"^is there anything else\b",
+        r"^and then what\b",
+        r"^what's next\b",
+        r"^can you clarify that\b",
+        r"^what are the details\b",
+        r"^could you break that down\b",
+        r"^what's a practical example of this\b",
+        r"^how does that work\b",
+    ]
+    for pat in context_dependent_patterns:
+        if re.search(pat, q):
+            return True
+    return False
 
 
 def is_valid_question(question: str, strict_mode: bool = True) -> bool:

@@ -11,10 +11,6 @@ A complete end-to-end Python pipeline for generating question-answer datasets fr
 - [Detailed Usage](#detailed-usage)
   - [Full Pipeline (Recommended)](#full-pipeline-recommended)
   - [Step-by-Step Instructions](#step-by-step-instructions)
-  - [Evaluate existing model on documents](#evaluate-existing-model-on-documents)
-- [RAG (Retrieval-Augmented Generation)](#rag-retrieval-augmented-generation)
-  - [Hybrid RAG](#hybrid-rag)
-- [Chat GUI](#chat-gui)
 - [Configuration](#configuration)
 - [Data Formats](#data-formats)
 - [Training Features](#training-features)
@@ -22,7 +18,6 @@ A complete end-to-end Python pipeline for generating question-answer datasets fr
 - [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
 - [Examples](#examples)
-- [Documentation](#documentation)
 
 ## Features
 
@@ -36,25 +31,20 @@ A complete end-to-end Python pipeline for generating question-answer datasets fr
 - **Efficient Training**: LoRA fine-tuning with mixed precision and gradient checkpointing
 - **Early Stopping**: Automatic training termination to prevent overfitting
 - **Interactive Chatbot**: Run fine-tuned models with conversation history
-- **Model Evaluation**: Comprehensive testing on holdout set with standard metrics (BLEU, ROUGE, embedding similarity, exact match, token F1; optional LLM-as-judge), plus preset tests (greetings, paraphrases, follow-ups)
-- **Evaluate on new data**: Use an existing trained model and evaluate it on QA generated from any document folder
-- **RAG pipeline**: Persistent vector store (Chroma), optional BM25 hybrid retrieval, ingest from documents or JSONL, query via CLI or Python API
-- **Hybrid RAG**: Combine RAG + fine-tuned model with a small LLM (restate question, merge retrievals, synthesize final answer)
-- **Chat GUI**: Streamlit interface to chat with Fine-tuned, RAG only, or Hybrid RAG; separate threads per mode; simple config file for non-technical users
+- **Model Evaluation**: Comprehensive testing on greetings, paraphrases, and follow-ups
 
 ### Advanced Features
 - Response-only loss masking (only train on assistant responses)
 - Semantic duplicate detection
-- **Train/validation/holdout split (80/10/10)**: Training data is split into train, validation (for early stopping), and a holdout test set used for evaluation
+- Train/validation split with validation loss tracking
 - Configurable hyperparameters via config.py
 - Comprehensive unit test suite
 - End-to-end pipeline script with model selection
-- **Evaluate-on-documents script**: Generate QA from a document folder and evaluate an existing trained model on that data only (no preset tests)
 
 ## Project Structure
 
 ```
-QA_bot_USDA_SHSU/
+QA_bot_USDA_SHSU-version2.0/
 ├── src/
 │   ├── dataset/
 │   │   ├── __init__.py
@@ -73,62 +63,31 @@ QA_bot_USDA_SHSU/
 │   ├── inference/
 │   │   ├── __init__.py
 │   │   ├── inference.py             # Interactive chatbot interface
-│   │   ├── evaluate.py              # Model evaluation script
-│   │   └── metrics.py               # BLEU, ROUGE, embedding similarity, exact match, token F1
-│   ├── rag/                         # RAG pipeline (Chroma + optional BM25)
-│   │   ├── __init__.py
-│   │   ├── store.py                 # Vector store and hybrid retrieval
-│   │   ├── generator.py             # LLM generation with context
-│   │   ├── pipeline.py              # RAGPipeline: retrieve + generate
-│   │   ├── ingest.py                # CLI: build index from docs/JSONL
-│   │   └── query.py                 # CLI: interactive or single query
-│   ├── Hybrid_RAG/                  # Hybrid RAG (restate + RAG + FT + synthesize)
-│   │   ├── __init__.py
-│   │   ├── pipeline.py              # HybridRAGPipeline orchestrator
-│   │   ├── restater.py              # Small LLM: restate question 5 ways
-│   │   ├── synthesizer.py           # Small LLM: synthesize final answer
-│   │   ├── small_llm.py             # Shared small LLM loader
-│   │   └── query.py                 # CLI for hybrid RAG
+│   │   └── evaluate.py              # Model evaluation script
 │   └── utils/
 │       ├── __init__.py
 │       ├── model_utils.py           # Centralized model loading
 │       ├── llm_utils.py             # LLM generation utilities
 │       └── file_processor.py        # Document processing
-├── GUI/                             # Streamlit chat interface
-│   ├── app.py                       # Chat app (Fine-tuned / RAG / Hybrid RAG)
-│   ├── gui_config.env               # Config for models and paths (key=value)
-│   └── README.md                    # How to run and edit config
 ├── scripts/
-│   ├── run_pipeline.sh              # End-to-end pipeline script
-│   ├── run_eval_on_documents.sh     # Evaluate existing model on QA from a document folder
-│   ├── run_pipeline_slurm.sh        # SLURM job for pipeline
-│   ├── run_pipeline_slurm_cpu.sh    # SLURM pipeline (CPU)
-│   ├── run_training_only_slurm.sh   # SLURM training only
-│   ├── run.slurm                    # SLURM run script
-│   ├── submit_pipeline.sh           # Submit pipeline to SLURM
-│   └── inference.slurm             # SLURM inference
-├── docs/
-│   ├── rag_usage.md                 # RAG ingest and query guide
-│   ├── hybrid_rag_usage.md          # Hybrid RAG guide
-│   └── qa_generation_guide.md       # QA generation guide
+│   └── run_pipeline.sh              # End-to-end pipeline script
 ├── tests/                           # Unit test suite
-│   ├── conftest.py
+│   ├── conftest.py                  # Test fixtures
 │   ├── test_conversational_data.py
 │   ├── test_data_cleaner.py
 │   ├── test_multiturn_generator.py
 │   └── test_paraphrase_generator.py
-├── .streamlit/
-│   └── config.toml                 # Muted theme for Chat GUI
 ├── config.py                        # Configuration settings
-├── pyproject.toml                   # Project metadata (optional)
-├── requirements.txt                # Python dependencies
-└── README.md                        # This file
+├── requirements.txt                 # Python dependencies
+├── README.md                        # This file
+├── CLAUDE.md                        # AI assistant guidance
+└── IMPLEMENTATION_PLAN.md           # Development roadmap
 ```
 
 ## Installation
 
 ### Prerequisites
-- Python 3.9 or higher (3.10+ recommended for latest chromadb/onnxruntime wheels)
+- Python 3.8 or higher
 - CUDA-compatible GPU (optional, but recommended for faster training)
 - 8GB+ RAM (16GB+ recommended)
 
@@ -137,7 +96,7 @@ QA_bot_USDA_SHSU/
 1. Clone the repository:
 ```bash
 git clone <repository-url>
-cd QA_bot_USDA_SHSU-version2.1
+cd QA_bot_USDA_SHSU-version2.0
 ```
 
 2. Install Python packages:
@@ -152,11 +111,7 @@ pip install -r requirements.txt
 - `datasets` - Dataset processing
 - `trl` - Transformer Reinforcement Learning
 - `python-docx` - DOCX file processing
-- `sentence-transformers` - Embeddings and semantic similarity (RAG, evaluation)
-- `chromadb` - Persistent vector store for RAG
-- `rank_bm25` - Sparse retrieval for optional RAG hybrid search
-- `streamlit` - Chat GUI
-- `rouge-score`, `nltk` - Evaluation metrics (BLEU, ROUGE, etc.)
+- `sentence-transformers` - Semantic similarity (optional)
 - `pytest` - Testing framework
 
 ## Quick Start
@@ -183,9 +138,9 @@ This will:
 2. Clean and validate the data
 3. Create multi-turn conversation examples
 4. Merge all datasets
-5. Fine-tune the model with LoRA (data is split 80% train, 10% validation, 10% holdout)
-6. Save the fine-tuned model and the holdout test set
-7. Evaluate model performance on the holdout set plus preset tests (greetings, etc.)
+5. Fine-tune the model with LoRA
+6. Save the fine-tuned model
+7. Evaluate model performance
 
 ### 3. Chat with Your Model
 
@@ -233,10 +188,8 @@ The `run_pipeline.sh` script provides a complete end-to-end workflow with extens
 | `-a, --augment-paraphrases NUM` | Number of paraphrase variations | 0 |
 | `--skip-generation` | Skip QA generation (use existing dataset) | false |
 | `--skip-training` | Skip training step | false |
-| `--eval-only` | Only run evaluation (uses existing model and, if present, holdout set in output-dir) | false |
+| `--eval-only` | Only run evaluation | false |
 | `-h, --help` | Show help message | - |
-
-After training, the pipeline saves a **holdout test set** to `output-dir/training_test.jsonl` and runs evaluation on it together with preset tests (greetings, etc.). With `--eval-only`, evaluation uses that holdout file if it exists.
 
 #### Advanced Pipeline Examples
 
@@ -272,22 +225,11 @@ For more control, run each stage individually:
 Extract QA pairs from your documents using an LLM:
 
 ```bash
-# Set PYTHONPATH and test the import
-cd /home/shsu/Desktop/LLM_Insect_USDA/QA_bot_USDA_SHSU
-export PYTHONPATH="$(pwd):$PYTHONPATH"
-
 python src/dataset/dataset_creator.py \
     --input_dir data_input \
     --output_file data_output/qa_dataset.jsonl \
     --model_name TinyLlama/TinyLlama-1.1B-Chat-v1.0 \
     --num_questions 3
-
-python src/dataset/dataset_creator.py \
-    --input_dir data_input \
-    --output_file data_output/qa_dataset.jsonl \
-    --model_name meta-llama/Llama-3.1-8B-Instruct \
-    --num_questions 3
-    --use_llm_paraphrases
 ```
 
 **Options:**
@@ -357,7 +299,6 @@ python src/dataset/generators/multiturn_generator.py \
     --input data_output/qa_cleaned.jsonl \
     --output data_output/multiturn.jsonl \
     --include_coreference
-    --num_followups 4
 ```
 
 **Options:**
@@ -393,7 +334,7 @@ python src/dataset/merge_datasets.py \
 
 #### 5. Fine-tune Model
 
-Train the model with LoRA. The dataset is automatically split into **80% train**, **10% validation** (for early stopping), and **10% holdout** (saved for evaluation; not used for training):
+Train the model with LoRA:
 
 ```bash
 python src/training/fine_tuner.py \
@@ -404,23 +345,11 @@ python src/training/fine_tuner.py \
     --per_device_train_batch_size 2 \
     --gradient_accumulation_steps 4 \
     --early_stopping_patience 3
-
-python src/training/fine_tuner.py \
-    --dataset_path data_output/training_dataset.jsonl \
-    --output_dir fine_tuned_weights \
-    --model_name meta-llama/Llama-3.1-8B-Instruct \
-    --num_train_epochs 10 \
-    --per_device_train_batch_size 2 \
-    --gradient_accumulation_steps 4 \
-    --early_stopping_patience 3
 ```
-
-A holdout test set is written to `data_output/training_test.jsonl` by default (or to `--holdout_output_path` if specified).
 
 **Training Options:**
 - `--dataset_path`: Path to training dataset
 - `--output_dir`: Output directory for model weights
-- `--holdout_output_path`: Where to save the 10% holdout set for evaluation (default: same dir as dataset, file `training_test.jsonl`)
 - `--model_name`: Base model to fine-tune
 - `--num_train_epochs`: Number of training epochs
 - `--per_device_train_batch_size`: Batch size per GPU
@@ -436,28 +365,21 @@ A holdout test set is written to `data_output/training_test.jsonl` by default (o
 
 #### 6. Evaluate Model
 
-Test model performance. When the pipeline runs, it evaluates on the **holdout set** (`training_test.jsonl`) first, then on preset tests (greetings, gratitude, farewells, rephrased questions, multi-turn):
+Test model performance:
 
 ```bash
 python src/inference/evaluate.py \
     --model_path fine_tuned_weights \
     --base_model TinyLlama/TinyLlama-1.1B-Chat-v1.0 \
-    --output data_output/evaluation_report.json \
-    --test_data data_output/training_test.jsonl
+    --output data_output/evaluation_report.json
 ```
 
-**Evaluation options:**
-- `--test_data`: Path to a JSONL test set (e.g. holdout set). When provided, evaluation runs on this data first. The pipeline passes the saved holdout file automatically.
-- `--test_data_only`: Evaluate **only** on the file given by `--test_data` (no preset greeting/gratitude/multiturn tests). Use this when you want results for a specific dataset only.
-
-**Evaluation metrics (on holdout/test data):** BLEU, ROUGE-1/2/L, embedding cosine similarity, exact match, token F1; optional LLM-as-judge. Results are aggregated and written to the evaluation report.
-
-**Evaluation tests (when not using `--test_data_only`):**
-- Holdout (test set) — model answers from the held-out data; scored with the metrics above
+**Evaluation Tests:**
 - Greeting responses
-- Gratitude and farewells
 - Paraphrased questions
-- Follow-up questions and coreference resolution
+- Follow-up questions
+- Coreference resolution
+- General QA accuracy
 
 #### 7. Interactive Chat
 
@@ -484,103 +406,6 @@ python src/inference/inference.py \
     --input_file questions.txt \
     --output_file answers.txt
 ```
-
-### Evaluate existing model on documents
-
-If you already have a trained model and want to evaluate it on **new data** (e.g. a different document folder), use the dedicated script. It (1) reads a document folder, (2) generates question-answer pairs from those documents (same as the training pipeline), and (3) runs evaluation **only** on that generated data (no preset greeting/farewell tests). Results are saved in the output directory.
-
-**Usage:**
-
-```bash
-./scripts/run_eval_on_documents.sh --peft-model fine_tuned_weights --input-dir data_input --output-dir eval_output
-```
-
-**Required:**
-- `--peft-model PATH` — Path to your trained model weights (LoRA adapter or full model)
-
-**Options:**
-- `--input-dir` / `-i` — Folder containing documents (.txt, .md, .docx). Default: `data_input`
-- `--output-dir` / `-o` — Where to save generated QA and the evaluation report. Default: `eval_output`
-- `--model` / `-m` — Base model name used to **generate** the QA (not the model being evaluated). Default: TinyLlama
-- `--questions` / `-q` — Number of questions per chunk when generating QA. Default: 3
-
-**Output files (in the output directory):**
-- `generated_qa_eval.jsonl` — Generated question-answer pairs from the documents
-- `evaluation_report.json` — Evaluation report (same format as the main pipeline), with scores only for this generated data
-
-**Example: evaluate a trained model on a new set of docs**
-
-```bash
-./scripts/run_eval_on_documents.sh \
-  --peft-model fine_tuned_weights \
-  --input-dir ./new_docs \
-  --output-dir ./eval_new_docs \
-  --questions 5
-```
-
-To evaluate **only** on a specific test file (e.g. your own JSONL) without generating from documents, run the evaluation script directly:
-
-```bash
-python src/inference/evaluate.py \
-  --model_path fine_tuned_weights \
-  --base_model TinyLlama/TinyLlama-1.1B-Chat-v1.0 \
-  --test_data my_test_data.jsonl \
-  --test_data_only \
-  --output my_evaluation_report.json
-```
-
-## RAG (Retrieval-Augmented Generation)
-
-The project includes an optional **RAG pipeline** that uses a persistent vector store (Chroma) and optional hybrid retrieval (BM25) to answer questions from your documents. All components are open source (Chroma, sentence-transformers, rank_bm25, Hugging Face Transformers).
-
-- **Ingest:** Build an index from a document directory or JSONL file.
-- **Query:** Ask questions in interactive mode or with a single question; the pipeline retrieves relevant chunks and generates an answer with the configured LLM.
-
-**Quick start:**
-
-```bash
-# 1. Build the index (from a folder and/or JSONL)
-python -m src.rag.ingest --input-dir data_input --db-path rag_db
-
-# 2. Query (interactive or single question)
-python -m src.rag.query --db-path rag_db --interactive
-python -m src.rag.query --db-path rag_db "Your question here"
-```
-
-**`db-path`** is the directory where the Chroma database (and optional BM25 index) are stored. You can reuse the same path to append more documents or use `--replace` when ingesting to rebuild from scratch.
-
-**Use the pipeline in code:**
-
-```python
-from src.rag import RAGPipeline
-
-pipeline = RAGPipeline(db_path="rag_db", model_name="TinyLlama/TinyLlama-1.1B-Chat-v1.0")
-answer = pipeline.answer("Your question")
-```
-
-For full options (hybrid retrieval, JSONL input, chunk size, etc.), see [docs/rag_usage.md](docs/rag_usage.md).
-
-### Hybrid RAG
-
-A **Hybrid RAG** pipeline combines RAG with your fine-tuned model and a small LLM: the small LLM restates the question in 5 different ways; RAG retrieves from all 6 queries (original + restatements), merges results, and generates one RAG answer; the fine-tuned model answers the same 6 questions; the small LLM then synthesizes a single final answer from the RAG and FT candidates. Use it when you have both a RAG index and a fine-tuned model and want a single, high-confidence answer.
-
-```bash
-python -m src.Hybrid_RAG.query --db-path rag_db --peft-model fine_tuned_weights --base-model TinyLlama/TinyLlama-1.1B-Chat-v1.0 --interactive
-```
-
-See [docs/hybrid_rag_usage.md](docs/hybrid_rag_usage.md) for options and programmatic use.
-
-## Chat GUI
-
-A **Streamlit chat interface** lets you choose one of three modes and chat in the browser: **Fine-tuned model**, **RAG only**, or **Hybrid RAG**. Each mode has its own conversation thread. Human and assistant messages are clearly separated; the design is plain with muted colors. Configuration is done via a single file (`GUI/gui_config.env`, key=value with comments) so non-technical users can set model paths and options.
-
-**Run from project root:**
-
-```bash
-streamlit run GUI/app.py
-```
-
-Use the sidebar to select the mode (Fine-tuned / RAG only / Hybrid RAG). Edit `GUI/gui_config.env` to set `PEFT_MODEL_PATH`, `RAG_DB_PATH`, `BASE_MODEL`, and other options. See [GUI/README.md](GUI/README.md) for details.
 
 ## Configuration
 
@@ -690,11 +515,10 @@ Monitors validation loss and stops training when:
 - Prevents overfitting
 - Saves training time
 
-### Train/Validation/Holdout Split
-- Automatically splits data **80% train**, **10% validation**, **10% holdout**
-- Train set is used for gradient updates; validation set is used for early stopping and selecting the best checkpoint
-- Holdout set is saved to a JSONL file (e.g. `training_test.jsonl`) and is **not** used during training; the pipeline uses it for evaluation so you get an unbiased estimate of performance on unseen data
-- Tracks validation loss each epoch and logs training metrics
+### Train/Validation Split
+- Automatically splits data 90/10
+- Tracks validation loss each epoch
+- Logs training metrics
 
 ### LoRA (Low-Rank Adaptation)
 - Parameter-efficient fine-tuning
@@ -882,41 +706,6 @@ python src/training/fine_tuner.py \
     --batch-size 2
 ```
 
-### Example 5: Evaluate existing model on a new document folder
-
-```bash
-# You already have trained weights and want to see how the model does on a new set of documents
-./scripts/run_eval_on_documents.sh \
-    --peft-model fine_tuned_weights \
-    --input-dir ./new_eval_docs \
-    --output-dir ./eval_results \
-    --questions 5
-
-# Output: eval_results/generated_qa_eval.jsonl and eval_results/evaluation_report.json
-```
-
-### Example 6: Chat GUI (Fine-tuned, RAG, or Hybrid RAG)
-
-```bash
-# 1. Ensure gui_config.env has your paths (PEFT_MODEL_PATH, RAG_DB_PATH, etc.)
-# 2. Run the Streamlit app from project root
-streamlit run GUI/app.py
-
-# In the browser, select "Fine-tuned model", "RAG only", or "Hybrid RAG" in the sidebar and chat.
-```
-
-## Documentation
-
-Detailed guides are in the [docs/](docs/) folder:
-
-- [docs/qa_generation_guide.md](docs/qa_generation_guide.md) — Choosing number of questions per chunk
-- [docs/rag_usage.md](docs/rag_usage.md) — RAG ingest and query
-- [docs/hybrid_rag_usage.md](docs/hybrid_rag_usage.md) — Hybrid RAG pipeline
-- [docs/evaluation.md](docs/evaluation.md) — Evaluation metrics and how to run evaluation
-- [docs/README.md](docs/README.md) — Index of all documentation
-
-See [GUI/README.md](GUI/README.md) for the Chat GUI.
-
 ## Contributing
 
 Contributions are welcome! Please:
@@ -929,7 +718,7 @@ Contributions are welcome! Please:
 
 ## License
 
-This project is licensed under the **MIT License**. See [LICENSE](LICENSE) for the full text. Please check individual model licenses (e.g. Hugging Face models) before commercial use.
+This project is for research and educational purposes. Please check individual model licenses before commercial use.
 
 
 ## Acknowledgments
