@@ -80,8 +80,6 @@ QA_bot_USDA_SHSU-version2.0/
 ├── config.py                        # Configuration settings
 ├── requirements.txt                 # Python dependencies
 ├── README.md                        # This file
-├── CLAUDE.md                        # AI assistant guidance
-└── IMPLEMENTATION_PLAN.md           # Development roadmap
 ```
 
 ## Installation
